@@ -11,7 +11,7 @@ python --version >nul 2>&1
 if %errorlevel% neq 0 (
     color 0C
     echo [ERRO] O Python nao esta instalado neste computador!
-    echo Por favor, peca para a pessoa instalar o Python antes.
+    echo Por favor instale o Python antes.
     echo Lembre-se de avisar para marcar a opcao "Add Python to PATH" durante a instalacao.
     echo.
     pause
@@ -53,7 +53,7 @@ echo.
 echo ===================================================
 echo INSTALACAO CONCLUIDA COM SUCESSO!
 echo ===================================================
-echo O computador desta pessoa agora possui:
+echo Este computador agora possui:
 echo - O app no Menu Iniciar ("Bloqueador de Teclado")
 echo - O comando "bloqueador" no Windows + R
 echo - O comando "bloqueador" no CMD/PowerShell
