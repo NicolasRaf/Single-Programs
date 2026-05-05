@@ -30,13 +30,16 @@ if not exist "%APP_DIR%" mkdir "%APP_DIR%"
 :: Copia o arquivo python principal para a nova pasta
 copy /Y "bloqueador_teclado.py" "%APP_DIR%\bloqueador_teclado.py" >nul
 
+:: Encontra o executável pythonw
+for /f "delims=" %%I in ('python -c "import sys, os; p=os.path.join(os.path.dirname(sys.executable), 'pythonw.exe'); print(p if os.path.exists(p) else 'pythonw.exe')"') do set "PYTHONW_PATH=%%I"
+
 :: Cria o atalho .bat (que vai ser usado no terminal e Win+R)
 echo @echo off > "%APP_DIR%\bloqueador.bat"
-echo start "" pythonw "%APP_DIR%\bloqueador_teclado.py" >> "%APP_DIR%\bloqueador.bat"
+echo start "" "%PYTHONW_PATH%" "%APP_DIR%\bloqueador_teclado.py" >> "%APP_DIR%\bloqueador.bat"
 
 :: Cria o atalho no Menu Iniciar usando PowerShell
 echo [3/4] Criando atalho no Menu Iniciar...
-powershell -Command "$WshShell = New-Object -comObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%APPDATA%\Microsoft\Windows\Start Menu\Programs\Bloqueador de Teclado.lnk'); $Shortcut.TargetPath = 'pythonw.exe'; $Shortcut.Arguments = '\"%APP_DIR%\bloqueador_teclado.py\"'; $Shortcut.WindowStyle = 1; $Shortcut.Save()"
+powershell -Command "$WshShell = New-Object -comObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%APPDATA%\Microsoft\Windows\Start Menu\Programs\Bloqueador de Teclado.lnk'); $Shortcut.TargetPath = '%PYTHONW_PATH%'; $Shortcut.Arguments = '\"%APP_DIR%\bloqueador_teclado.py\"'; $Shortcut.WindowStyle = 1; $Shortcut.Save()"
 
 :: Adiciona no PATH do usuário para funcionar no Terminal e registra no Win+R
 echo [4/4] Configurando comandos (Win+R e Terminal)...
