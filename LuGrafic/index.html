@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="LuGrafic — Visualizador matemático para gráficos 2D e 3D. Plote funções e coordenadas com interatividade total." />
+    <title>LuGrafic — Visualizador Matemático</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Header -->
+      <header id="app-header">
+        <div class="header-brand">
+          <div class="logo-icon">
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 24 L10 8 L16 20 L22 4 L28 16" stroke="url(#grad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <defs>
+                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" style="stop-color:#ff0055"/>
+                  <stop offset="40%" style="stop-color:#ff0055"/>
+                  <stop offset="70%" style="stop-color:#9d00ff"/>
+                  <stop offset="100%" style="stop-color:#00d4ff"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <h1>LuGrafic</h1>
+        </div>
+        <div class="header-actions">
+          <button id="btn-download-csv" class="btn-ghost" title="Exportar Tabela CSV">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="8" y1="13" x2="16" y2="13"></line>
+              <line x1="8" y1="17" x2="16" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </button>
+          <button id="btn-download-png" class="btn-ghost" title="Baixar Gráfico PNG">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+          <div class="header-divider"></div>
+          <button id="btn-clear-all" class="btn-ghost" title="Limpar tudo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Layout -->
+      <main id="app-main">
+        <!-- Sidebar -->
+        <aside id="sidebar">
+
+          <!-- Dimension Toggle (2D / 3D) -->
+          <div class="panel" id="panel-dimension">
+            <div class="panel-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v18M3 12h18"></path>
+              </svg>
+              Dimensão
+            </div>
+            <div class="dimension-toggle">
+              <button class="dim-btn active" id="btn-2d" data-dim="2d">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                <span class="dim-label">2D</span>
+                <span class="dim-desc">Curvas f(x)</span>
+              </button>
+              <button class="dim-btn" id="btn-3d" data-dim="3d">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"></path>
+                  <path d="M12 12l8-4.5"></path>
+                  <path d="M12 12v9"></path>
+                  <path d="M12 12L4 7.5"></path>
+                </svg>
+                <span class="dim-label">3D</span>
+                <span class="dim-desc">Superfícies f(x,y)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Mode Toggle (Função / Coordenadas) -->
+          <div class="panel" id="panel-mode">
+            <div class="mode-tabs">
+              <button class="mode-tab active" data-mode="function" id="tab-function">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 16.98h-5.99c-1.1 0-1.95-.5-2.5-1.35L4 7"/>
+                  <path d="m2 17 6-6"/>
+                </svg>
+                Função
+              </button>
+              <button class="mode-tab" data-mode="coordinates" id="tab-coordinates">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                </svg>
+                Coordenadas
+              </button>
+            </div>
+          </div>
+
+          <!-- Function Input -->
+          <div class="panel" id="panel-function">
+            <div class="panel-label">
+              <span class="label-icon" id="equation-label-icon">f(x)</span>
+              Equações
+            </div>
+            
+            <div id="equation-list" class="equation-list">
+              <!-- Equation rows injected by JS -->
+            </div>
+
+            <button id="btn-add-equation" class="btn-ghost btn-add-eq" title="Adicionar equação">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Adicionar Equação
+            </button>
+
+            <!-- Math Toolbar (Teclado Auxiliar) -->
+            <div class="math-toolbar" id="math-toolbar">
+              <button class="btn-math" data-insert="sin()">sin</button>
+              <button class="btn-math" data-insert="cos()">cos</button>
+              <button class="btn-math" data-insert="tan()">tan</button>
+              <button class="btn-math" data-insert="sqrt()">√</button>
+              <button class="btn-math" data-insert="^">x^y</button>
+              <button class="btn-math" data-insert="pi">π</button>
+              <button class="btn-math" data-insert="e">e</button>
+            </div>
+            
+            <div class="input-hint" id="equation-hint">
+              Pressione <kbd>Enter</kbd> nos campos para plotar
+            </div>
+          </div>
+
+          <!-- Coordinates Input — Interactive Table -->
+          <div class="panel hidden" id="panel-coordinates">
+            <div class="panel-label">
+              <span class="label-icon" id="coord-label-icon">XY</span>
+              Tabela de Pontos
+            </div>
+
+            <!-- Sub-tabs: Tabela / Colar Texto -->
+            <div class="coord-subtabs">
+              <button class="coord-subtab active" id="subtab-table" data-subtab="table">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="3" y1="9" x2="21" y2="9"></line>
+                  <line x1="3" y1="15" x2="21" y2="15"></line>
+                  <line x1="9" y1="3" x2="9" y2="21"></line>
+                  <line x1="15" y1="3" x2="15" y2="21"></line>
+                </svg>
+                Tabela
+              </button>
+              <button class="coord-subtab" id="subtab-paste" data-subtab="paste">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                </svg>
+                Colar Texto
+              </button>
+            </div>
+
+            <!-- Table mode -->
+            <div class="coord-content" id="coord-table-view">
+              <div class="coord-table-wrapper">
+                <table class="coord-table" id="coord-table">
+                  <thead>
+                    <tr id="coord-table-header">
+                      <th class="col-index">#</th>
+                      <th>X</th>
+                      <th>Y</th>
+                    </tr>
+                  </thead>
+                  <tbody id="coord-table-body">
+                    <!-- Rows populated by JS -->
+                  </tbody>
+                </table>
+              </div>
+              <div class="coord-table-actions">
+                <button class="btn-coord-action" id="btn-add-row" title="Adicionar linha">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  Linha
+                </button>
+                <button class="btn-coord-action btn-danger" id="btn-remove-row" title="Remover última linha">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  Linha
+                </button>
+                <span class="coord-count" id="coord-count">0 pontos</span>
+              </div>
+            </div>
+
+            <!-- Paste mode -->
+            <div class="coord-content hidden" id="coord-paste-view">
+              <textarea
+                id="input-coordinates"
+                class="input-coordinates"
+                placeholder="Cole aqui seus pontos:&#10;&#10;x, y&#10;0, 0&#10;1, 1&#10;2, 4&#10;3, 9&#10;&#10;Formatos: CSV, TSV, ponto-e-vírgula&#10;Cabeçalhos são ignorados"
+                spellcheck="false"
+              ></textarea>
+              <button class="btn-coord-action btn-import" id="btn-import-paste" title="Importar para tabela">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="8 17 12 21 16 17"></polyline>
+                  <line x1="12" y1="12" x2="12" y2="21"></line>
+                  <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"></path>
+                </svg>
+                Importar para Tabela
+              </button>
+            </div>
+          </div>
+
+          <!-- Axis Controls -->
+          <div class="panel" id="panel-axes">
+            <div class="panel-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 1v6m0 6v10M1 12h6m6 0h10"></path>
+              </svg>
+              Intervalo dos Eixos
+            </div>
+            <div class="axis-controls">
+              <div class="axis-row">
+                <span class="axis-label">X</span>
+                <input type="number" id="x-min" class="input-axis" value="-10" />
+                <span class="axis-separator">→</span>
+                <input type="number" id="x-max" class="input-axis" value="10" />
+              </div>
+              <div class="axis-row">
+                <span class="axis-label">Y</span>
+                <input type="number" id="y-min" class="input-axis" value="-10" />
+                <span class="axis-separator">→</span>
+                <input type="number" id="y-max" class="input-axis" value="10" />
+              </div>
+              <div class="axis-row" id="row-z-axis" style="display: none;">
+                <span class="axis-label">Z</span>
+                <input type="number" id="z-min" class="input-axis" value="-10" />
+                <span class="axis-separator">→</span>
+                <input type="number" id="z-max" class="input-axis" value="10" />
+              </div>
+              <div class="axis-row">
+                <span class="axis-label resolution-label">Passos</span>
+                <input type="number" id="input-steps" class="input-axis input-steps" value="200" min="10" max="1000" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Visualization Style -->
+          <div class="panel" id="panel-style">
+            <div class="panel-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+              Estilo Visual
+            </div>
+            <div class="style-select-wrapper">
+              <select id="select-style-2d" class="style-select">
+                <option value="lines">Linha Contínua</option>
+                <option value="markers">Apenas Pontos</option>
+                <option value="lines+markers">Linha + Pontos</option>
+                <option value="area">Área Preenchida</option>
+              </select>
+              <select id="select-style-3d" class="style-select" style="display: none;">
+                <option value="surface">Superfície Sólida</option>
+                <option value="wireframe">Superfície com Grade</option>
+                <option value="markers">Apenas Pontos (Grade)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Plot Button -->
+          <button id="btn-plot" class="btn-plot">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            Plotar Gráfico
+          </button>
+
+          <!-- Error Display -->
+          <div id="error-display" class="error-display hidden"></div>
+
+          <!-- History -->
+          <div class="panel" id="panel-history">
+            <div class="panel-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              Histórico
+            </div>
+            <ul id="history-list" class="history-list">
+              <li class="history-empty">Nenhuma equação plotada ainda</li>
+            </ul>
+          </div>
+        </aside>
+
+        <!-- Graph Area -->
+        <section id="graph-area">
+          <div id="plot-container" class="plot-container">
+            <div id="plot-placeholder" class="plot-placeholder">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity="0.3">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+              <p>Digite uma equação e clique em <strong>Plotar</strong></p>
+              <span class="placeholder-hint">Atalho: <kbd>Enter</kbd></span>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
