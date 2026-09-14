@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "EiLtuBrEmlk=",
+  "dgSpecHash": "oAceIdG+ni4=",
   "success": true,
-  "projectFilePath": "C:\\Users\\nicol\\Documents\\IFPI\\Codigos\\SerialCom\\SerialCom.csproj",
+  "projectFilePath": "C:\\Users\\nicol\\Documents\\IFPI\\Single-Programs\\SerialCom\\SerialCom.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\nicol\\.nuget\\packages\\runtime.linux-arm.runtime.native.system.io.ports\\8.0.0\\runtime.linux-arm.runtime.native.system.io.ports.8.0.0.nupkg.sha512",
     "C:\\Users\\nicol\\.nuget\\packages\\runtime.linux-arm64.runtime.native.system.io.ports\\8.0.0\\runtime.linux-arm64.runtime.native.system.io.ports.8.0.0.nupkg.sha512",

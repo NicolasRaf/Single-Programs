@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\nicol\\Documents\\IFPI\\Codigos\\SerialCom\\SerialCom.csproj": {}
+    "C:\\Users\\nicol\\Documents\\IFPI\\Single-Programs\\SerialCom\\SerialCom.csproj": {}
   },
   "projects": {
-    "C:\\Users\\nicol\\Documents\\IFPI\\Codigos\\SerialCom\\SerialCom.csproj": {
+    "C:\\Users\\nicol\\Documents\\IFPI\\Single-Programs\\SerialCom\\SerialCom.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\nicol\\Documents\\IFPI\\Codigos\\SerialCom\\SerialCom.csproj",
+        "projectUniqueName": "C:\\Users\\nicol\\Documents\\IFPI\\Single-Programs\\SerialCom\\SerialCom.csproj",
         "projectName": "SerialCom",
-        "projectPath": "C:\\Users\\nicol\\Documents\\IFPI\\Codigos\\SerialCom\\SerialCom.csproj",
+        "projectPath": "C:\\Users\\nicol\\Documents\\IFPI\\Single-Programs\\SerialCom\\SerialCom.csproj",
         "packagesPath": "C:\\Users\\nicol\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\nicol\\Documents\\IFPI\\Codigos\\SerialCom\\obj\\",
+        "outputPath": "C:\\Users\\nicol\\Documents\\IFPI\\Single-Programs\\SerialCom\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\nicol\\AppData\\Roaming\\NuGet\\NuGet.Config"
