@@ -124,13 +124,15 @@
               <!-- Equation rows injected by JS -->
             </div>
 
-            <button id="btn-add-equation" class="btn-ghost btn-add-eq" title="Adicionar equação">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              Adicionar Equação
-            </button>
+            <div class="action-buttons-row" style="display: flex; gap: 8px; margin-top: 15px; margin-bottom: 5px; align-items: center;">
+              <button id="btn-add-equation" class="btn-ghost btn-add-eq" title="Adicionar equação" style="flex: 1; margin: 0;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Adicionar Equação
+              </button>
+            </div>
 
             <!-- Math Toolbar (Teclado Auxiliar) -->
             <div class="math-toolbar" id="math-toolbar">
@@ -141,10 +143,28 @@
               <button class="btn-math" data-insert="^">x^y</button>
               <button class="btn-math" data-insert="pi">π</button>
               <button class="btn-math" data-insert="e">e</button>
+              <button class="btn-math" data-insert="t">t</button>
+              <button class="btn-math" data-insert="theta">θ</button>
             </div>
+            <div class="input-hint" id="equation-hint">Pressione <kbd>Enter</kbd> nos campos para plotar</div>
             
-            <div class="input-hint" id="equation-hint">
-              Pressione <kbd>Enter</kbd> nos campos para plotar
+            <!-- Parameters Container (Dynamic Sliders) -->
+            <div id="parameters-container" class="parameters-container hidden">
+              <div class="panel-label" style="font-size: 0.75rem; margin-top: 10px; margin-bottom: 5px;">
+                Parâmetros Dinâmicos
+              </div>
+              <div id="parameters-list" class="parameters-list">
+                <!-- Sliders injected by JS -->
+              </div>
+            </div>
+
+            <!-- Analysis Toggle -->
+            <div class="analysis-toggle-container" id="analysis-container">
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-analysis">
+                <span class="toggle-slider round"></span>
+              </label>
+              <span class="toggle-label" style="font-size: 0.8rem; color: var(--text-muted); margin-left: 8px;">Analisar Gráfico (Raízes, Máximos e Mínimos)</span>
             </div>
           </div>
 
@@ -204,9 +224,26 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
-                  Linha
+                </button>
+                <button class="btn-coord-action btn-danger" id="btn-clear-coord" title="Limpar toda a tabela">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
+                <button class="btn-coord-action" id="btn-suggest-coord" title="Sugerir Coordenadas Aleatórias" style="padding-left: 8px; padding-right: 8px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"></path>
+                  </svg>
                 </button>
                 <span class="coord-count" id="coord-count">0 pontos</span>
+              </div>
+              <div class="analysis-toggle-container" style="margin-top: 10px;">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="toggle-trendline">
+                  <span class="toggle-slider round"></span>
+                </label>
+                <span class="toggle-label" style="font-size: 0.8rem; color: var(--text-muted); margin-left: 8px;">Mostrar Linha de Tendência (Regressão)</span>
               </div>
             </div>
 
@@ -231,61 +268,81 @@
 
           <!-- Axis Controls -->
           <div class="panel" id="panel-axes">
-            <div class="panel-label">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M12 1v6m0 6v10M1 12h6m6 0h10"></path>
-              </svg>
-              Intervalo dos Eixos
+            <div class="panel-label collapsible" data-target="content-axes">
+              <div class="label-left">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M12 1v6m0 6v10M1 12h6m6 0h10"></path>
+                </svg>
+                Intervalo dos Eixos
+              </div>
+              <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </div>
-            <div class="axis-controls">
-              <div class="axis-row">
-                <span class="axis-label">X</span>
-                <input type="number" id="x-min" class="input-axis" value="-10" />
-                <span class="axis-separator">→</span>
-                <input type="number" id="x-max" class="input-axis" value="10" />
-              </div>
-              <div class="axis-row">
-                <span class="axis-label">Y</span>
-                <input type="number" id="y-min" class="input-axis" value="-10" />
-                <span class="axis-separator">→</span>
-                <input type="number" id="y-max" class="input-axis" value="10" />
-              </div>
-              <div class="axis-row" id="row-z-axis" style="display: none;">
-                <span class="axis-label">Z</span>
-                <input type="number" id="z-min" class="input-axis" value="-10" />
-                <span class="axis-separator">→</span>
-                <input type="number" id="z-max" class="input-axis" value="10" />
-              </div>
-              <div class="axis-row">
-                <span class="axis-label resolution-label">Passos</span>
-                <input type="number" id="input-steps" class="input-axis input-steps" value="200" min="10" max="1000" />
+            <div class="panel-content collapsed" id="content-axes">
+              <div class="axis-controls">
+                <div class="axis-row">
+                  <span class="axis-label">X</span>
+                  <input type="number" id="x-min" class="input-axis" value="-10" />
+                  <span class="axis-separator">→</span>
+                  <input type="number" id="x-max" class="input-axis" value="10" />
+                </div>
+                <div class="axis-row">
+                  <span class="axis-label">Y</span>
+                  <input type="number" id="y-min" class="input-axis" value="-10" />
+                  <span class="axis-separator">→</span>
+                  <input type="number" id="y-max" class="input-axis" value="10" />
+                </div>
+                <div class="axis-row log-options" style="justify-content: flex-start; gap: 15px; margin-top: -5px; margin-bottom: 5px;">
+                  <label style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                    <input type="checkbox" id="x-log" style="accent-color: var(--accent);">
+                    Eixo X Log
+                  </label>
+                  <label style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                    <input type="checkbox" id="y-log" style="accent-color: var(--accent);">
+                    Eixo Y Log
+                  </label>
+                </div>
+                <div class="axis-row" id="row-z-axis" style="display: none;">
+                  <span class="axis-label">Z</span>
+                  <input type="number" id="z-min" class="input-axis" value="-10" />
+                  <span class="axis-separator">→</span>
+                  <input type="number" id="z-max" class="input-axis" value="10" />
+                </div>
+                <div class="axis-row">
+                  <span class="axis-label resolution-label">Passos</span>
+                  <input type="number" id="input-steps" class="input-axis input-steps" value="200" min="10" max="1000" />
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Visualization Style -->
           <div class="panel" id="panel-style">
-            <div class="panel-label">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                <line x1="12" y1="22.08" x2="12" y2="12"></line>
-              </svg>
-              Estilo Visual
+            <div class="panel-label collapsible" data-target="content-style">
+              <div class="label-left">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+                Estilo Visual
+              </div>
+              <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </div>
-            <div class="style-select-wrapper">
-              <select id="select-style-2d" class="style-select">
-                <option value="lines">Linha Contínua</option>
-                <option value="markers">Apenas Pontos</option>
-                <option value="lines+markers">Linha + Pontos</option>
-                <option value="area">Área Preenchida</option>
-              </select>
-              <select id="select-style-3d" class="style-select" style="display: none;">
-                <option value="surface">Superfície Sólida</option>
-                <option value="wireframe">Superfície com Grade</option>
-                <option value="markers">Apenas Pontos (Grade)</option>
-              </select>
+            <div class="panel-content collapsed" id="content-style">
+              <div class="style-select-wrapper">
+                <select id="select-style-2d" class="style-select">
+                  <option value="lines">Linha Contínua</option>
+                  <option value="markers">Apenas Pontos</option>
+                  <option value="lines+markers">Linha + Pontos</option>
+                  <option value="area">Área Preenchida</option>
+                </select>
+                <select id="select-style-3d" class="style-select" style="display: none;">
+                  <option value="surface">Superfície Sólida</option>
+                  <option value="wireframe">Superfície com Grade</option>
+                  <option value="markers">Apenas Pontos (Grade)</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -302,16 +359,21 @@
 
           <!-- History -->
           <div class="panel" id="panel-history">
-            <div class="panel-label">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12 6 12 12 16 14"></polyline>
-              </svg>
-              Histórico
+            <div class="panel-label collapsible" data-target="content-history">
+              <div class="label-left">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                Histórico
+              </div>
+              <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </div>
-            <ul id="history-list" class="history-list">
-              <li class="history-empty">Nenhuma equação plotada ainda</li>
-            </ul>
+            <div class="panel-content collapsed" id="content-history">
+              <ul id="history-list" class="history-list">
+                <li class="history-empty">Nenhuma equação plotada ainda</li>
+              </ul>
+            </div>
           </div>
         </aside>
 

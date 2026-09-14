@@ -6,7 +6,8 @@
  */
 
 import './index.css';
-import { evaluateGrid2D, evaluateGrid3D, is3DExpression } from './mathEngine';
+import Plotly from 'plotly.js-dist-min';
+import { evaluateGrid2D, evaluateGrid3D, is3DExpression, extractParameters, calculateDefiniteIntegral, detectEquationType, evaluateParametric, evaluatePolar, findNotablePoints, calculateLinearRegression, findIntersections, type PlotData2D, type NotablePoint } from './mathEngine';
 import {
   renderPlot2D,
   renderPlot3D,
@@ -16,7 +17,7 @@ import {
   resetColorCycle,
   nextColor,
   PlotStyle2D,
-  PlotStyle3D,
+  PlotStyle3D
 } from './plotRenderer';
 import { parseCoordinates } from './coordinateParser';
 
@@ -40,6 +41,7 @@ const $btnPlot = document.getElementById('btn-plot') as HTMLButtonElement;
 const $btnClearAll = document.getElementById('btn-clear-all') as HTMLButtonElement;
 const $btnDownloadPng = document.getElementById('btn-download-png') as HTMLButtonElement;
 const $btnDownloadCsv = document.getElementById('btn-download-csv') as HTMLButtonElement;
+const $btnSuggestCoord = document.getElementById('btn-suggest-coord') as HTMLButtonElement;
 const $plotContainer = document.getElementById('plot-container') as HTMLDivElement;
 const $plotPlaceholder = document.getElementById('plot-placeholder') as HTMLDivElement;
 const $errorDisplay = document.getElementById('error-display') as HTMLDivElement;
@@ -48,7 +50,6 @@ const $rowZAxis = document.getElementById('row-z-axis') as HTMLDivElement;
 
 const $selectStyle2d = document.getElementById('select-style-2d') as HTMLSelectElement;
 const $selectStyle3d = document.getElementById('select-style-3d') as HTMLSelectElement;
-const $panelStyle = document.getElementById('panel-style') as HTMLDivElement;
 
 // Coordinate table elements
 const $subtabTable = document.getElementById('subtab-table') as HTMLButtonElement;
@@ -61,6 +62,202 @@ const $btnAddRow = document.getElementById('btn-add-row') as HTMLButtonElement;
 const $btnRemoveRow = document.getElementById('btn-remove-row') as HTMLButtonElement;
 const $btnImportPaste = document.getElementById('btn-import-paste') as HTMLButtonElement;
 const $coordCount = document.getElementById('coord-count') as HTMLSpanElement;
+const $toggleAnalysis = document.getElementById('toggle-analysis') as HTMLInputElement;
+const $toggleTrendline = document.getElementById('toggle-trendline') as HTMLInputElement;
+
+const $xLog = document.getElementById('x-log') as HTMLInputElement;
+const $yLog = document.getElementById('y-log') as HTMLInputElement;
+
+const $btnClearCoord = document.getElementById('btn-clear-coord') as HTMLButtonElement;
+
+// Accordion Logic
+document.querySelectorAll('.panel-label.collapsible').forEach(label => {
+  // Add 'collapsed' to all collapsibles by default initially to ensure state matches UI
+  label.classList.add('collapsed');
+  
+  label.addEventListener('click', (e) => {
+    const targetId = (e.currentTarget as HTMLElement).getAttribute('data-target');
+    if (targetId) {
+      const targetContent = document.getElementById(targetId);
+      if (targetContent) {
+        label.classList.toggle('collapsed');
+        targetContent.classList.toggle('collapsed');
+      }
+    }
+  });
+});
+
+// Download Logic
+if ($btnDownloadPng) {
+  $btnDownloadPng.addEventListener('click', () => {
+    if (hasPlot && $plotContainer) {
+      Plotly.downloadImage($plotContainer, {
+        format: 'png',
+        width: 1200,
+        height: 800,
+        filename: 'lugrafic_export'
+      });
+    } else {
+      showError('Nenhum gráfico para exportar.');
+    }
+  });
+}
+
+if ($btnDownloadCsv) {
+  $btnDownloadCsv.addEventListener('click', () => {
+    if (currentMode === 'coordinates') {
+      exportCoordinatesCSV();
+    } else {
+      if (!hasPlot) {
+        showError('Nenhum gráfico para exportar.');
+        return;
+      }
+      exportEquationsCSV();
+    }
+  });
+}
+
+// Suggestion Logic for Coordinates
+if ($btnSuggestCoord) {
+  $btnSuggestCoord.addEventListener('click', () => {
+    setCoordSubtab('paste');
+    let text = '';
+    if (currentDimension === '3d') {
+      const shapeType3D = Math.floor(Math.random() * 2);
+      if (shapeType3D === 0) { // 3D Helix
+        const numPoints = 100;
+        for (let i = 0; i < numPoints; i++) {
+          const t = i * 0.2;
+          text += `${(5 * Math.cos(t)).toFixed(3)}, ${(5 * Math.sin(t)).toFixed(3)}, ${(t - 10).toFixed(3)}\n`;
+        }
+      } else { // 3D Scatter on a surface (Paraboloid)
+        const numPoints = 100;
+        for (let i = 0; i < numPoints; i++) {
+          const x = (Math.random() - 0.5) * 20;
+          const y = (Math.random() - 0.5) * 20;
+          const z = (x*x + y*y) / 10 - 5;
+          text += `${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}\n`;
+        }
+      }
+    } else {
+      const shapeType = Math.floor(Math.random() * 4);
+      if (shapeType === 0) { // Spiral
+        const numPoints = 100;
+        for (let i = 0; i < numPoints; i++) {
+          const t = i * 0.1;
+          text += `${(t * Math.cos(t)).toFixed(3)}, ${(t * Math.sin(t)).toFixed(3)}\n`;
+        }
+      } else if (shapeType === 1) { // Circle
+        const numPoints = 50;
+        for (let i = 0; i <= numPoints; i++) {
+          const t = (i / numPoints) * 2 * Math.PI;
+          text += `${(5 * Math.cos(t)).toFixed(3)}, ${(5 * Math.sin(t)).toFixed(3)}\n`;
+        }
+      } else if (shapeType === 2) { // Heart shape
+        const numPoints = 100;
+        for (let i = 0; i <= numPoints; i++) {
+          const t = (i / numPoints) * 2 * Math.PI;
+          const x = 16 * Math.pow(Math.sin(t), 3);
+          const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+          // Scale it down a bit to fit nicely in -10 to 10
+          text += `${(x * 0.5).toFixed(3)}, ${(y * 0.5).toFixed(3)}\n`;
+        }
+      } else { // Dampened sine wave
+        const numPoints = 100;
+        for (let i = 0; i < numPoints; i++) {
+          const x = -10 + i * (20 / numPoints);
+          const y = Math.sin(x * 3) * Math.exp(-Math.abs(x) * 0.2) * 5;
+          text += `${x.toFixed(3)}, ${y.toFixed(3)}\n`;
+        }
+      }
+    }
+
+    if (typeof $inputCoordinates !== 'undefined' && $inputCoordinates) {
+      $inputCoordinates.value = text;
+    }
+    
+    // Automatically plot after suggesting
+    handlePlot();
+  });
+}
+
+function exportCoordinatesCSV() {
+  const data = getTableData().filter(r => r.x && r.y);
+  if (data.length === 0) {
+    showError('Nenhum dado de coordenada para exportar.');
+    return;
+  }
+  let csv = currentDimension === '3d' ? 'X,Y,Z\n' : 'X,Y\n';
+  data.forEach(c => {
+    if (currentDimension === '3d') {
+      csv += `${c.x},${c.y},${c.z}\n`;
+    } else {
+      csv += `${c.x},${c.y}\n`;
+    }
+  });
+  triggerDownload(csv, 'lugrafic_coordenadas.csv');
+}
+
+function exportEquationsCSV() {
+  const validEquations = equations.filter(eq => eq.expr.trim() !== '');
+  if (validEquations.length === 0) {
+    showError('Nenhuma equação válida para exportar.');
+    return;
+  }
+  
+  const steps = parseInt($steps.value) || 200;
+  const xMin = parseFloat($xMin.value) || -10;
+  const xMax = parseFloat($xMax.value) || 10;
+  
+  let csv = 'X';
+  validEquations.forEach(eq => {
+    csv += `,${eq.expr}`;
+  });
+  csv += '\n';
+  
+  // Basic CSV export assuming all evaluate on same grid
+  // In a real scenario, parametric/polar have different bases.
+  // Here we just use the first cartesian or standard linspace.
+  const xVals = Array.from({length: steps}, (_, i) => xMin + (xMax - xMin) * i / (steps - 1));
+  
+  xVals.forEach((x, i) => {
+    let row = `${x.toFixed(4)}`;
+    validEquations.forEach(eq => {
+      try {
+        const type = detectEquationType(eq.expr);
+        if (type === 'cartesian') {
+          const plotData = evaluateGrid2D(eq.expr, xMin, xMax, steps, currentParameters);
+          row += `,${plotData.y[i] !== undefined ? plotData.y[i].toFixed(4) : ''}`;
+        } else {
+          row += `,NA`; // Placeholder for parametric/polar since they don't share same X axis
+        }
+      } catch(e) {
+        row += `,ERR`;
+      }
+    });
+    csv += row + '\n';
+  });
+  
+  triggerDownload(csv, 'lugrafic_equacoes.csv');
+}
+
+function triggerDownload(content: string, filename: string) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+if ($toggleAnalysis) {
+  $toggleAnalysis.addEventListener('change', () => {
+    if (hasPlot) plotFunction();
+  });
+}
 
 const $xMin = document.getElementById('x-min') as HTMLInputElement;
 const $xMax = document.getElementById('x-max') as HTMLInputElement;
@@ -96,10 +293,63 @@ interface EquationInput {
   id: string;
   expr: string;
   color: string;
+  integral?: { active: boolean; a: number; b: number };
 }
 
 let equations: EquationInput[] = [];
 let activeEquationInput: HTMLInputElement | null = null;
+let currentParameters: Record<string, number> = {};
+
+const $parametersContainer = document.getElementById('parameters-container') as HTMLDivElement;
+const $parametersList = document.getElementById('parameters-list') as HTMLDivElement;
+
+function updateParameters(exprs: string[]) {
+  const params = extractParameters(exprs);
+  
+  const newParams: Record<string, number> = {};
+  params.forEach(p => {
+    newParams[p] = currentParameters[p] !== undefined ? currentParameters[p] : 1;
+  });
+  currentParameters = newParams;
+  
+  if (params.length === 0) {
+    if ($parametersContainer) $parametersContainer.classList.add('hidden');
+    return;
+  }
+  
+  if ($parametersContainer) {
+    $parametersContainer.classList.remove('hidden');
+    $parametersList.innerHTML = '';
+    
+    params.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'param-row';
+      
+      const label = document.createElement('span');
+      label.className = 'param-label';
+      label.innerText = `${p} = ${currentParameters[p]}`;
+      
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.className = 'param-slider';
+      slider.min = '-10';
+      slider.max = '10';
+      slider.step = '0.1';
+      slider.value = currentParameters[p].toString();
+      
+      slider.addEventListener('input', (e) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        currentParameters[p] = val;
+        label.innerText = `${p} = ${val}`;
+        if (hasPlot) handlePlot();
+      });
+      
+      row.appendChild(label);
+      row.appendChild(slider);
+      $parametersList.appendChild(row);
+    });
+  }
+}
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 9);
@@ -134,13 +384,20 @@ function updateEquation(id: string, expr: string): void {
 
 function renderEquationList(): void {
   $equationList.innerHTML = '';
-  equations.forEach((eq, index) => {
+  equations.forEach((eq) => {
     const row = document.createElement('div');
     row.className = 'equation-row';
     
-    const colorIndicator = document.createElement('div');
+    const colorIndicator = document.createElement('input');
+    colorIndicator.type = 'color';
     colorIndicator.className = 'equation-color';
-    colorIndicator.style.backgroundColor = eq.color;
+    colorIndicator.value = eq.color;
+    
+    colorIndicator.addEventListener('input', (e) => {
+      const newColor = (e.target as HTMLInputElement).value;
+      eq.color = newColor;
+      if (hasPlot) handlePlot();
+    });
     
     const input = document.createElement('input');
     input.type = 'text';
@@ -171,13 +428,76 @@ function renderEquationList(): void {
     removeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
     removeBtn.onclick = () => removeEquation(eq.id);
     
+    const suggestBtn = document.createElement('button');
+    suggestBtn.className = 'btn-suggest-eq-row btn-ghost';
+    suggestBtn.title = 'Sugerir Função Aleatória';
+    suggestBtn.style.padding = '0';
+    suggestBtn.style.width = '32px';
+    suggestBtn.style.height = '32px';
+    suggestBtn.style.display = 'flex';
+    suggestBtn.style.alignItems = 'center';
+    suggestBtn.style.justifyContent = 'center';
+    suggestBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"></path></svg>';
+    suggestBtn.onclick = () => {
+      if (currentDimension === '2d') {
+        const examples2D = ['sin(x) * x', 'x^3 - 2*x', '(3*cos(t), 3*sin(t))', 'theta', 'sin(x^2)', 'exp(-x^2)', '(cos(t)*t, sin(t)*t)', 'x^2 - 4'];
+        updateEquation(eq.id, examples2D[Math.floor(Math.random() * examples2D.length)]);
+      } else {
+        const examples3D = ['sin(sqrt(x^2 + y^2))', 'x^2 - y^2', 'sin(x) * cos(y)', 'exp(-(x^2 + y^2))', '(sin(x*5) + cos(y*5)) / 5'];
+        updateEquation(eq.id, examples3D[Math.floor(Math.random() * examples3D.length)]);
+      }
+      renderEquationList();
+      handlePlot();
+    };
+    
+    const integralBtn = document.createElement('button');
+    integralBtn.className = 'btn-integral-eq';
+    integralBtn.title = 'Calcular Integral';
+    integralBtn.innerHTML = '∫';
+    integralBtn.onclick = () => {
+      if (!eq.integral) eq.integral = { active: false, a: 0, b: 1 };
+      eq.integral.active = !eq.integral.active;
+      renderEquationList();
+      if (hasPlot) handlePlot();
+    };
+    
     row.appendChild(colorIndicator);
     row.appendChild(input);
+    row.appendChild(suggestBtn);
+    if (currentDimension === '2d') {
+       row.appendChild(integralBtn);
+    }
     if (equations.length > 1) {
        row.appendChild(removeBtn);
     }
     
     $equationList.appendChild(row);
+    
+    if (eq.integral?.active && currentDimension === '2d') {
+      const intPanel = document.createElement('div');
+      intPanel.className = 'integral-panel';
+      intPanel.innerHTML = `
+        <span class="int-symbol">∫</span>
+        <input type="number" class="int-input int-a" value="${eq.integral.a}" step="0.1" title="Limite Inferior (a)">
+        <span class="int-to">até</span>
+        <input type="number" class="int-input int-b" value="${eq.integral.b}" step="0.1" title="Limite Superior (b)">
+        <span class="int-result" id="int-result-${eq.id}">= ?</span>
+      `;
+      const inputA = intPanel.querySelector('.int-a') as HTMLInputElement;
+      const inputB = intPanel.querySelector('.int-b') as HTMLInputElement;
+      
+      inputA.addEventListener('input', (e) => {
+        eq.integral!.a = parseFloat((e.target as HTMLInputElement).value) || 0;
+        if (hasPlot) handlePlot();
+      });
+      
+      inputB.addEventListener('input', (e) => {
+        eq.integral!.b = parseFloat((e.target as HTMLInputElement).value) || 0;
+        if (hasPlot) handlePlot();
+      });
+      
+      $equationList.appendChild(intPanel);
+    }
   });
 }
 
@@ -194,9 +514,11 @@ function setDimension(dim: Dimension): void {
 
   // Update equation label
   $equationLabelIcon.textContent = dim === '3d' ? 'f(x,y)' : 'f(x)';
-  $inputEquation.placeholder = dim === '3d'
-    ? 'ex: x^2 + y^2, sin(x)*cos(y)'
-    : 'ex: sin(x), x^2 + 3*x - 1';
+  $equationList.querySelectorAll('.equation-input').forEach(input => {
+    (input as HTMLInputElement).placeholder = dim === '3d'
+      ? 'ex: x^2 + y^2, sin(x)*cos(y)'
+      : 'ex: sin(x), x^2 + 3*x - 1';
+  });
 
   // Update coordinate table header
   updateCoordTableHeader();
@@ -234,7 +556,12 @@ function setMode(mode: AppMode): void {
   $panelCoordinates.classList.toggle('hidden', mode !== 'coordinates');
 
   if (mode === 'function') {
-    $inputEquation.focus();
+    if (activeEquationInput) {
+      activeEquationInput.focus();
+    } else {
+      const firstInput = $equationList.querySelector('.equation-input') as HTMLInputElement;
+      if (firstInput) firstInput.focus();
+    }
   }
 }
 
@@ -439,9 +766,22 @@ $btnAddRow.addEventListener('click', () => {
   // Focus first cell of the new row
   const newRow = $coordTableBody.lastElementChild;
   const firstInput = newRow?.querySelector('input') as HTMLInputElement;
-  firstInput?.focus();
+  if (firstInput) firstInput.focus();
 });
 $btnRemoveRow.addEventListener('click', removeLastTableRow);
+
+if ($btnClearCoord) {
+  $btnClearCoord.addEventListener('click', () => {
+    $coordTableBody.innerHTML = '';
+    for (let i = 0; i < 5; i++) addTableRow();
+    $inputCoordinates.value = '';
+    updateCoordCount();
+    clearPlot($plotContainer);
+    showPlaceholder();
+    hasPlot = false;
+  });
+}
+
 $btnImportPaste.addEventListener('click', importPasteToTable);
 
 // ────────────────────────────────────────────────────────
@@ -503,7 +843,8 @@ function renderHistory(): void {
       <span class="history-dim ${entry.dimension === '3d' ? 'dim-3d' : ''}">${entry.dimension.toUpperCase()}</span>
     `;
     li.addEventListener('click', () => {
-      $inputEquation.value = entry.expression;
+      equations = [];
+      addEquation(entry.expression);
       setMode('function');
       setDimension(entry.dimension);
       plotFunction();
@@ -543,6 +884,9 @@ async function plotFunction(): Promise<void> {
 
   const { xMin, xMax, yMin, yMax, steps } = getAxisValues();
   const is3D = currentDimension === '3d';
+  
+  // Extrai parâmetros e gera os sliders
+  updateParameters(validEquations.map(e => e.expr));
 
   try {
     hidePlaceholder();
@@ -550,19 +894,64 @@ async function plotFunction(): Promise<void> {
     if (is3D) {
       const style3d = $selectStyle3d.value as PlotStyle3D;
       const items = validEquations.map(eq => ({
-        data: evaluateGrid3D(eq.expr, xMin, xMax, yMin, yMax, steps),
+        data: evaluateGrid3D(eq.expr, xMin, xMax, yMin, yMax, steps, currentParameters),
         exprLabel: eq.expr,
         color: eq.color
       }));
       await renderPlot3D($plotContainer, items, style3d);
     } else {
       const style2d = $selectStyle2d.value as PlotStyle2D;
-      const items = validEquations.map(eq => ({
-        data: evaluateGrid2D(eq.expr, xMin, xMax, steps),
-        exprLabel: eq.expr,
-        color: eq.color
-      }));
-      await renderPlot2D($plotContainer, items, style2d);
+      const items = validEquations.map(eq => {
+        const type = detectEquationType(eq.expr);
+        let plotData: PlotData2D;
+        let notable: NotablePoint[] = [];
+        
+        if (type === 'parametric') {
+          plotData = evaluateParametric(eq.expr, 0, 2 * Math.PI, steps, currentParameters);
+        } else if (type === 'polar') {
+          plotData = evaluatePolar(eq.expr, 0, 2 * Math.PI, steps, currentParameters);
+        } else {
+          plotData = evaluateGrid2D(eq.expr, xMin, xMax, steps, currentParameters);
+          if ($toggleAnalysis && $toggleAnalysis.checked) {
+            notable = findNotablePoints(plotData);
+          }
+        }
+
+        const item: { data: PlotData2D; exprLabel: string; color: string; integral?: { data: PlotData2D }; notablePoints?: NotablePoint[] } = {
+          data: plotData,
+          exprLabel: eq.expr,
+          color: eq.color,
+          notablePoints: notable
+        };
+        
+        if (eq.integral?.active && type === 'cartesian') {
+          const area = calculateDefiniteIntegral(eq.expr, eq.integral.a, eq.integral.b, currentParameters);
+          const intResultEl = document.getElementById(`int-result-${eq.id}`);
+          if (intResultEl) intResultEl.innerText = `= ${area.toFixed(4)}`;
+          
+          item.integral = {
+             data: evaluateGrid2D(eq.expr, eq.integral.a, eq.integral.b, Math.min(steps, 200), currentParameters)
+          };
+        }
+        return item;
+      });
+
+      // Find intersections if analysis is on
+      if ($toggleAnalysis && $toggleAnalysis.checked) {
+        const cartesianData = items.map(i => i.data);
+        const intersections = findIntersections(cartesianData);
+        if (intersections.length > 0 && items.length > 0) {
+          if (!items[0].notablePoints) items[0].notablePoints = [];
+          items[0].notablePoints.push(...intersections);
+        }
+      }
+
+      const axisTypes: { x: 'linear' | 'log', y: 'linear' | 'log' } = {
+        x: $xLog.checked ? 'log' : 'linear',
+        y: $yLog.checked ? 'log' : 'linear'
+      };
+
+      await renderPlot2D($plotContainer, items, style2d, false, axisTypes);
     }
 
     hasPlot = true;
@@ -604,7 +993,25 @@ async function plotCoordinatesFromTable(): Promise<void> {
       const x = filled.map((r) => parseFloat(r.x)).filter((n) => !isNaN(n));
       const y = filled.map((r) => parseFloat(r.y)).filter((n) => !isNaN(n));
 
-      await renderScatter2D($plotContainer, { x, y }, 'Coordenadas', style2d);
+      const axisTypes: { x: 'linear' | 'log', y: 'linear' | 'log' } = {
+        x: $xLog.checked ? 'log' : 'linear',
+        y: $yLog.checked ? 'log' : 'linear'
+      };
+
+      let regressionData = undefined;
+      if ($toggleTrendline && $toggleTrendline.checked) {
+        const reg = calculateLinearRegression(x, y);
+        if (reg) {
+          const minX = Math.min(...x);
+          const maxX = Math.max(...x);
+          regressionData = {
+            m: reg.m, b: reg.b, rSquared: reg.rSquared,
+            lineData: { x: [minX, maxX], y: [reg.m * minX + reg.b, reg.m * maxX + reg.b] }
+          };
+        }
+      }
+
+      await renderScatter2D($plotContainer, { x, y }, 'Coordenadas', style2d, axisTypes, regressionData);
     }
 
     hasPlot = true;
@@ -644,7 +1051,26 @@ async function plotCoordinatesFromPaste(): Promise<void> {
     } else if (result.data2d) {
       setDimension('2d');
       const style2d = $selectStyle2d.value as PlotStyle2D;
-      await renderScatter2D($plotContainer, result.data2d, 'Coordenadas', style2d);
+
+      const axisTypes: { x: 'linear' | 'log', y: 'linear' | 'log' } = {
+        x: $xLog.checked ? 'log' : 'linear',
+        y: $yLog.checked ? 'log' : 'linear'
+      };
+
+      let regressionData = undefined;
+      if ($toggleTrendline && $toggleTrendline.checked) {
+        const reg = calculateLinearRegression(result.data2d.x, result.data2d.y);
+        if (reg) {
+          const minX = Math.min(...result.data2d.x);
+          const maxX = Math.max(...result.data2d.x);
+          regressionData = {
+            m: reg.m, b: reg.b, rSquared: reg.rSquared,
+            lineData: { x: [minX, maxX], y: [reg.m * minX + reg.b, reg.m * maxX + reg.b] }
+          };
+        }
+      }
+
+      await renderScatter2D($plotContainer, result.data2d, 'Coordenadas', style2d, axisTypes, regressionData);
     }
 
     hasPlot = true;
@@ -675,7 +1101,8 @@ function handlePlot(): void {
 
 function handleClearAll(): void {
   clearPlot($plotContainer);
-  $inputEquation.value = '';
+  equations = [];
+  addEquation(); // Add an empty equation
   $inputCoordinates.value = '';
   hideError();
   showPlaceholder();
@@ -695,12 +1122,13 @@ function handleClearAll(): void {
 $btnPlot.addEventListener('click', handlePlot);
 $btnClearAll.addEventListener('click', handleClearAll);
 
-$selectStyle2d.addEventListener('change', () => {
-  if (hasPlot && currentDimension === '2d') handlePlot();
-});
-$selectStyle3d.addEventListener('change', () => {
-  if (hasPlot && currentDimension === '3d') handlePlot();
-});
+// Auto-update plot when styling/analysis/axes settings change
+$selectStyle2d.addEventListener('change', () => { if (hasPlot) handlePlot(); });
+$selectStyle3d.addEventListener('change', () => { if (hasPlot) handlePlot(); });
+if ($toggleAnalysis) $toggleAnalysis.addEventListener('change', () => { if (hasPlot) handlePlot(); });
+if ($toggleTrendline) $toggleTrendline.addEventListener('change', () => { if (hasPlot) handlePlot(); });
+if ($xLog) $xLog.addEventListener('change', () => { if (hasPlot) handlePlot(); });
+if ($yLog) $yLog.addEventListener('change', () => { if (hasPlot) handlePlot(); });
 
 $btnAddEquation.addEventListener('click', () => {
   addEquation('');
@@ -738,8 +1166,7 @@ $btnDownloadPng.addEventListener('click', async () => {
     format: 'png',
     filename: `lugrafic_plot`,
     height: 800,
-    width: 1200,
-    scale: 2
+    width: 1200
   });
 });
 

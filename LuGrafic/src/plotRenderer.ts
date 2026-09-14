@@ -6,7 +6,7 @@
  */
 
 import Plotly from 'plotly.js-dist-min';
-import type { PlotData2D, PlotData3D } from './mathEngine';
+import type { PlotData2D, PlotData3D, NotablePoint } from './mathEngine';
 
 export type PlotStyle2D = 'lines' | 'markers' | 'lines+markers' | 'area';
 export type PlotStyle3D = 'surface' | 'wireframe' | 'markers';
@@ -67,21 +67,34 @@ function baseLayout(): Partial<Plotly.Layout> {
   };
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  if (hex.startsWith('#') && hex.length === 7) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return hex; // Fallback
+}
+
 /**
  * Renderiza um gráfico 2D (linha) no container especificado.
  *
  * @param container - Elemento DOM onde o gráfico será montado
- * @param data - Dados {x[], y[]} do mathEngine
- * @param exprLabel - Label para a curva (usado no hover)
+ * @param items - Lista de equações, cores e possivelmente área de integral
+ * @param style - Estilo principal (linha, marcadores, etc)
  * @param append - Se true, adiciona ao gráfico existente ao invés de substituir
  */
 export async function renderPlot2D(
   container: HTMLElement,
-  items: { data: PlotData2D; exprLabel: string; color: string }[],
+  items: { data: PlotData2D; exprLabel: string; color: string; integral?: { data: PlotData2D }; notablePoints?: NotablePoint[] }[],
   style: PlotStyle2D = 'lines',
-  append = false
+  append = false,
+  axisTypes?: { x: 'linear' | 'log', y: 'linear' | 'log' }
 ): Promise<void> {
-  const traces: Partial<Plotly.PlotData>[] = items.map(item => {
+  const traces: Partial<Plotly.PlotData>[] = [];
+  
+  items.forEach(item => {
     const color = item.color;
     let mode: Plotly.PlotData['mode'] = 'lines';
     let fill: Plotly.PlotData['fill'] = 'none';
@@ -93,7 +106,7 @@ export async function renderPlot2D(
       fill = 'tozeroy';
     }
 
-    return {
+    traces.push({
       x: item.data.x,
       y: item.data.y,
       type: 'scatter' as Plotly.PlotType,
@@ -108,12 +121,50 @@ export async function renderPlot2D(
       marker: { color, size: 4 },
       hovertemplate: `<b>${item.exprLabel}</b><br>x: %{x:.4f}<br>y: %{y:.4f}<extra></extra>`,
       connectgaps: false,
-    };
+    });
+    
+    if (item.integral) {
+      traces.push({
+        x: item.integral.data.x,
+        y: item.integral.data.y,
+        type: 'scatter' as Plotly.PlotType,
+        mode: 'none',
+        fill: 'tozeroy',
+        name: `Integral ${item.exprLabel}`,
+        fillcolor: hexToRgba(color, 0.4),
+        hoverinfo: 'skip'
+      });
+    }
+    
+    if (item.notablePoints && item.notablePoints.length > 0) {
+      traces.push({
+        x: item.notablePoints.map(p => p.x),
+        y: item.notablePoints.map(p => p.y),
+        type: 'scatter' as Plotly.PlotType,
+        mode: 'markers',
+        name: `Análise ${item.exprLabel}`,
+        marker: {
+          color: '#ffffff',
+          size: 8,
+          line: { color, width: 2 }
+        },
+        text: item.notablePoints.map(p => {
+          if (p.type === 'raiz') return 'Raiz';
+          if (p.type === 'max') return 'Máximo';
+          if (p.type === 'min') return 'Mínimo';
+          if (p.type === 'intersection') return 'Interseção';
+          return p.label || 'Ponto';
+        }),
+        hovertemplate: `<b>%{text}</b><br>x: %{x:.4f}<br>y: %{y:.4f}<extra></extra>`,
+        showlegend: false
+      });
+    }
   });
 
   const layout: Partial<Plotly.Layout> = {
     ...baseLayout(),
     xaxis: {
+      type: axisTypes?.x || 'linear',
       gridcolor: THEME.gridColor,
       zerolinecolor: THEME.zeroLineColor,
       zerolinewidth: 1,
@@ -121,6 +172,7 @@ export async function renderPlot2D(
       showline: false,
     },
     yaxis: {
+      type: axisTypes?.y || 'linear',
       gridcolor: THEME.gridColor,
       zerolinecolor: THEME.zeroLineColor,
       zerolinewidth: 1,
@@ -158,7 +210,9 @@ export async function renderScatter2D(
   container: HTMLElement,
   data: PlotData2D,
   label = 'Coordenadas',
-  style: PlotStyle2D = 'lines+markers'
+  style: PlotStyle2D = 'lines+markers',
+  axisTypes?: { x: 'linear' | 'log', y: 'linear' | 'log' },
+  regression?: { m: number; b: number; rSquared: number; lineData: PlotData2D }
 ): Promise<void> {
   const color = nextColor();
 
@@ -184,15 +238,31 @@ export async function renderScatter2D(
     hovertemplate: `<b>${label}</b><br>x: %{x:.4f}<br>y: %{y:.4f}<extra></extra>`,
   };
 
+  const traces: Partial<Plotly.PlotData>[] = [trace];
+
+  if (regression) {
+    traces.push({
+      x: regression.lineData.x,
+      y: regression.lineData.y,
+      type: 'scatter' as Plotly.PlotType,
+      mode: 'lines',
+      name: `Tendência: y=${regression.m.toFixed(2)}x+${regression.b.toFixed(2)}`,
+      line: { color: THEME.emerald, width: 2, dash: 'dash' },
+      hovertemplate: `<b>Regressão Linear</b><br>y = ${regression.m.toFixed(3)}x + ${regression.b.toFixed(3)}<br>R² = ${regression.rSquared.toFixed(3)}<extra></extra>`
+    });
+  }
+
   const layout: Partial<Plotly.Layout> = {
     ...baseLayout(),
     xaxis: {
+      type: axisTypes?.x || 'linear',
       gridcolor: THEME.gridColor,
       zerolinecolor: THEME.zeroLineColor,
       zerolinewidth: 1,
       showgrid: true,
     },
     yaxis: {
+      type: axisTypes?.y || 'linear',
       gridcolor: THEME.gridColor,
       zerolinecolor: THEME.zeroLineColor,
       zerolinewidth: 1,
