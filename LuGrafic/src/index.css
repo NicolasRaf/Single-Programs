@@ -1322,3 +1322,103 @@ input:checked + .toggle-slider:before {
   margin-top: 0;
   pointer-events: none;
 }
+
+/* ── Thermodynamic Panel ── */
+
+.thermo-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.thermo-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.thermo-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.thermo-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.thermo-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thermo-input-label {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  min-width: 18px;
+  text-align: center;
+}
+
+.thermo-unit {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  min-width: 28px;
+}
+
+.thermo-results {
+  margin-top: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.thermo-result-header {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.thermo-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.thermo-result-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.thermo-result-value {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.thermo-warnings {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  font-size: 0.72rem;
+  color: #f59e0b;
+  line-height: 1.4;
+}
+

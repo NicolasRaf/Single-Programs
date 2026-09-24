@@ -8,6 +8,7 @@
 import './index.css';
 import Plotly from 'plotly.js-dist-min';
 import { evaluateGrid2D, evaluateGrid3D, is3DExpression, extractParameters, calculateDefiniteIntegral, detectEquationType, evaluateParametric, evaluatePolar, findNotablePoints, calculateLinearRegression, findIntersections, type PlotData2D, type NotablePoint } from './mathEngine';
+import { calculateThermoState, type ThermoInput } from './thermoEngine';
 import {
   renderPlot2D,
   renderPlot3D,
@@ -269,7 +270,7 @@ const $steps = document.getElementById('input-steps') as HTMLInputElement;
 // State
 // ────────────────────────────────────────────────────────
 
-type AppMode = 'function' | 'coordinates';
+type AppMode = 'function' | 'coordinates' | 'thermo';
 type Dimension = '2d' | '3d';
 type CoordSubtab = 'table' | 'paste';
 
@@ -514,11 +515,6 @@ function setDimension(dim: Dimension): void {
 
   // Update equation label
   $equationLabelIcon.textContent = dim === '3d' ? 'f(x,y)' : 'f(x)';
-  $equationList.querySelectorAll('.equation-input').forEach(input => {
-    (input as HTMLInputElement).placeholder = dim === '3d'
-      ? 'ex: x^2 + y^2, sin(x)*cos(y)'
-      : 'ex: sin(x), x^2 + 3*x - 1';
-  });
 
   // Update coordinate table header
   updateCoordTableHeader();
@@ -535,6 +531,9 @@ function setDimension(dim: Dimension): void {
 
   // Rebuild table rows to match dimension
   rebuildTableForDimension();
+
+  // Rebuild the equation list to update placeholders and show/hide dimension-specific buttons
+  renderEquationList();
 }
 
 $btn2D.addEventListener('click', () => setDimension('2d'));
@@ -543,17 +542,22 @@ $btn3D.addEventListener('click', () => setDimension('3d'));
 
 
 // ────────────────────────────────────────────────────────
-// Input Mode Toggle (Function / Coordinates)
+// Input Mode Toggle (Function / Coordinates / Thermo)
 // ────────────────────────────────────────────────────────
+
+const $tabThermo = document.getElementById('tab-thermo') as HTMLButtonElement;
+const $panelThermo = document.getElementById('panel-thermo') as HTMLDivElement;
 
 function setMode(mode: AppMode): void {
   currentMode = mode;
 
   $tabFunction.classList.toggle('active', mode === 'function');
   $tabCoordinates.classList.toggle('active', mode === 'coordinates');
+  $tabThermo.classList.toggle('active', mode === 'thermo');
 
   $panelFunction.classList.toggle('hidden', mode !== 'function');
   $panelCoordinates.classList.toggle('hidden', mode !== 'coordinates');
+  $panelThermo.classList.toggle('hidden', mode !== 'thermo');
 
   if (mode === 'function') {
     if (activeEquationInput) {
@@ -567,6 +571,64 @@ function setMode(mode: AppMode): void {
 
 $tabFunction.addEventListener('click', () => setMode('function'));
 $tabCoordinates.addEventListener('click', () => setMode('coordinates'));
+$tabThermo.addEventListener('click', () => setMode('thermo'));
+
+// ────────────────────────────────────────────────────────
+// Thermodynamic Calculator Logic
+// ────────────────────────────────────────────────────────
+
+{
+  const $thermoInputType = document.getElementById('thermo-input-type') as HTMLSelectElement;
+  const $thermoPRow = document.getElementById('thermo-p-row') as HTMLDivElement;
+  const $thermoTRow = document.getElementById('thermo-t-row') as HTMLDivElement;
+  const $thermoVRow = document.getElementById('thermo-v-row') as HTMLDivElement;
+  const $btnCalcThermo = document.getElementById('btn-calc-thermo') as HTMLButtonElement;
+
+  // Show/hide inputs based on input type selection
+  $thermoInputType.addEventListener('change', () => {
+    const type = $thermoInputType.value;
+    $thermoPRow.classList.toggle('hidden', type === 'TV');
+    $thermoTRow.classList.toggle('hidden', type === 'PV');
+    $thermoVRow.classList.toggle('hidden', type === 'PT');
+  });
+
+  $btnCalcThermo.addEventListener('click', () => {
+    const substance = (document.getElementById('thermo-substance') as HTMLSelectElement).value as 'water' | 'ideal';
+    const type = $thermoInputType.value as 'PT' | 'PV' | 'TV';
+    const pressure = parseFloat((document.getElementById('thermo-pressure') as HTMLInputElement).value) || 0;
+    const temperature = parseFloat((document.getElementById('thermo-temperature') as HTMLInputElement).value) || 0;
+    const volume = parseFloat((document.getElementById('thermo-volume') as HTMLInputElement).value) || 0;
+    const mass = parseFloat((document.getElementById('thermo-mass') as HTMLInputElement).value) || 1;
+
+    const input: ThermoInput = { type, pressure, temperature, volume, mass, substance };
+
+    try {
+      const state = calculateThermoState(input);
+
+      const $results = document.getElementById('thermo-results') as HTMLDivElement;
+      $results.classList.remove('hidden');
+
+      (document.getElementById('thermo-res-phase') as HTMLSpanElement).textContent = state.phase;
+      (document.getElementById('thermo-res-pressure') as HTMLSpanElement).textContent = `${state.pressure.toFixed(2)} kPa`;
+      (document.getElementById('thermo-res-temperature') as HTMLSpanElement).textContent = `${state.temperature.toFixed(2)} °C`;
+      (document.getElementById('thermo-res-volume') as HTMLSpanElement).textContent = `${state.volume.toExponential(4)} m³`;
+      (document.getElementById('thermo-res-specvol') as HTMLSpanElement).textContent = `${state.specificVolume.toExponential(4)} m³/kg`;
+      (document.getElementById('thermo-res-enthalpy') as HTMLSpanElement).textContent = `${state.enthalpy.toFixed(3)} kJ/kg`;
+      (document.getElementById('thermo-res-entropy') as HTMLSpanElement).textContent = `${state.entropy.toFixed(4)} kJ/(kg·K)`;
+
+      const $warnings = document.getElementById('thermo-warnings') as HTMLDivElement;
+      if (state.warnings.length > 0) {
+        $warnings.classList.remove('hidden');
+        $warnings.textContent = state.warnings.join(' ');
+      } else {
+        $warnings.classList.add('hidden');
+        $warnings.textContent = '';
+      }
+    } catch (err) {
+      showError('Erro no cálculo termodinâmico: ' + (err as Error).message);
+    }
+  });
+}
 
 // ────────────────────────────────────────────────────────
 // Coordinate Sub-tabs (Table / Paste)

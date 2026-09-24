@@ -294,17 +294,17 @@ export async function renderPlot3D(
   items: { data: PlotData3D; exprLabel: string; color: string }[],
   style: PlotStyle3D = 'surface'
 ): Promise<void> {
-  const colorscale: Plotly.ColorScale = [
-    [0, '#1a0a0e'],
-    [0.15, '#3b0040'],
-    [0.3, '#ff0055'],
-    [0.5, '#ff0055'],
-    [0.75, '#9d00ff'],
-    [0.9, '#00d4ff'],
-    [1, '#e0f7ff'],
-  ];
-
   const traces: any[] = items.map(item => {
+    // Generate a monochromatic colorscale from the equation's chosen color
+    const baseColor = item.color;
+    const darkColor = hexToRgba(baseColor, 0.25);
+    const midColor = hexToRgba(baseColor, 0.7);
+    const monoColorscale: Plotly.ColorScale = [
+      [0, darkColor],
+      [0.5, midColor],
+      [1, baseColor],
+    ];
+
     if (style === 'markers') {
       return {
         x: item.data.x.flat(),
@@ -314,8 +314,7 @@ export async function renderPlot3D(
         mode: 'markers',
         marker: {
           size: 3,
-          color: item.data.z.flat(),
-          colorscale,
+          color: baseColor,
           opacity: 0.8,
         },
         name: item.exprLabel,
@@ -327,12 +326,12 @@ export async function renderPlot3D(
         y: item.data.y,
         z: item.data.z,
         type: 'surface' as Plotly.PlotType,
-        colorscale,
+        colorscale: monoColorscale,
         opacity: style === 'wireframe' ? 0.7 : 0.92,
         contours: {
           z: { show: true, usecolormap: true, highlightcolor: '#ffffff', project: { z: false } },
-          x: { show: style === 'wireframe', color: '#ffffff', width: 1 },
-          y: { show: style === 'wireframe', color: '#ffffff', width: 1 },
+          x: { show: style === 'wireframe', color: baseColor, width: 1 },
+          y: { show: style === 'wireframe', color: baseColor, width: 1 },
         },
         name: item.exprLabel,
         hovertemplate: `<b>${item.exprLabel}</b><br>x: %{x:.3f}<br>y: %{y:.3f}<br>z: %{z:.3f}<extra></extra>`,
