@@ -1,32 +1,44 @@
-# LuGrafic 0.2.0
+# LuGrafic 0.3.0
 
 ## Download e atualização
 
-- **Windows x64:** baixe `LuGrafic_0.2.0_x64-setup.exe` (instalador recomendado) ou `LuGrafic_0.2.0_x64_en-US.msi`. Use apenas um dos instaladores.
+- **Windows x64:** baixe o arquivo `.exe` (instalador recomendado) ou `.msi` na seção de arquivos da release. Use apenas um dos instaladores.
 - Não é necessário instalar Node.js ou Rust para usar o aplicativo.
 - Requer Microsoft Edge WebView2; o setup pode precisar de internet para instalar esse componente.
 - Atualização manual pelo novo instalador. Não há atualização automática configurada.
-- Instaladores sem assinatura digital comercial: o Windows pode informar editor desconhecido.
+- Os instaladores não possuem assinatura digital comercial; o Windows pode informar editor desconhecido.
 
-## Novidades e correções
+## Novidades
 
-- Derivada simbólica em relação a x, com botão **f′**, expressão exibida e curva tracejada. Os pontos da derivada também são exportados para CSV.
-- Integral definida numérica pelo botão **∫**, com limites e área sombreada; pode ser usada simultaneamente com a derivada.
-- Fórmulas explícitas com `=`, como `y = x^2`, `f(x) = sin(x)`, `r = 2` e `z = sin(x)*cos(y)`, além de normalização de símbolos matemáticos usuais.
-- Correções na avaliação de curvas paramétricas, reconhecimento de parâmetros, importação de CSV/TSV, preservação de coordenadas Z ao alternar dimensões e exportação do gráfico renderizado.
-- Melhorias na validação de entradas, acessibilidade, controles de fórmulas e estados termodinâmicos inválidos.
-- Testes automatizados para os motores matemático, de coordenadas e termodinâmico.
+- Área de Termodinâmica redesenhada e integrada ao padrão visual dos gráficos.
+- Entradas por pressão e entalpia, pressão e entropia e pressão e volume específico.
+- Diagrama T–s interativo com indicação visual do estado e da fase.
+- Derivada simbólica e integral definida disponíveis nos gráficos cartesianos 2D.
+- Fórmulas explícitas com sinal de igualdade, como `y = x^2`, `f(x) = sin(x)` e `z = sin(x)*cos(y)`.
+- Histórico de gráficos persistente entre sessões, com restauração por mouse ou teclado.
+- Script local `npm run setup:windows` para testar, gerar instaladores novos e excluir versões antigas após sucesso.
+- Workflow do GitHub Actions para publicar automaticamente os instaladores Windows em tags `lugrafic-v*`.
 
-## Escopo e limitações
+## Correções e melhorias
 
-- Integral e derivada disponíveis apenas para funções cartesianas 2D, não para polares, paramétricas ou superfícies 3D.
-- `=` define funções explícitas; equações implícitas gerais, como `x^2 + y^2 = 1`, não são suportadas.
-- A derivação depende das regras suportadas pelo mathjs. Integrais são aproximações numéricas, inadequadas para intervalos com singularidades ou integrais impróprias.
-- Pontos notáveis e interseções são estimativas amostradas. A termodinâmica usa modelos aproximados para uso didático, não tabelas certificadas de propriedades.
-- O bundle JavaScript continua grande; otimização e isolamento dos cálculos em Worker ficam para versões futuras.
+- Melhor validação de coordenadas, fórmulas, limites dos eixos e entradas físicas.
+- Resultados termodinâmicos antigos são removidos ao alterar as entradas.
+- Plotagens consecutivas são serializadas para evitar atualizações fora de ordem.
+- Mais contraste, tipografia maior, responsividade e acessibilidade nos controles.
+- Exportações CSV preservam os dados efetivamente plotados.
+- TypeScript em modo estrito e CSP configurada para a aplicação desktop.
+
+## Limitações conhecidas
+
+- A termodinâmica usa modelos aproximados para fins didáticos, não uma implementação certificada da IAPWS-IF97.
+- Integral e derivada são suportadas apenas em funções cartesianas 2D.
+- Equações implícitas gerais, como `x^2 + y^2 = 1`, ainda não são suportadas.
+- O bundle inicial permanece grande devido ao Plotly e ao math.js.
 
 ## Validação
 
-- Suíte de 17 testes, compilação TypeScript/Vite e verificação Rust.
-- Verificação da interface no navegador, incluindo integral e derivada simultâneas, curva paramétrica e gráfico 3D, com a política CSP de produção.
-- Geração dos pacotes NSIS e MSI para Windows x64. A instalação/atualização em uma máquina limpa não foi validada nesta rodada.
+- 20 testes automatizados aprovados.
+- Build TypeScript/Vite em modo estrito aprovado.
+- Verificação Rust/Tauri aprovada.
+- Auditoria npm sem vulnerabilidades conhecidas.
+- Fluxos principais validados no navegador.

@@ -35,6 +35,21 @@ $version = [string]$tauriConfig.version
 $productName = [string]$tauriConfig.productName
 Write-Host "Gerando $productName $version..." -ForegroundColor Cyan
 
+function Get-Sha256Hex {
+    param([Parameter(Mandatory = $true)][string]$LiteralPath)
+
+    $stream = [IO.File]::OpenRead($LiteralPath)
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha256.ComputeHash($stream)
+        return ([BitConverter]::ToString($bytes)).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
+
 Push-Location $projectRoot
 try {
     if (-not $SkipTests) {
@@ -74,7 +89,7 @@ foreach ($installer in $oldInstallers) {
 Write-Host ''
 Write-Host 'Instaladores atuais:' -ForegroundColor Green
 $currentInstallers | Sort-Object Name | ForEach-Object {
-    $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = Get-Sha256Hex -LiteralPath $_.FullName
     Write-Host "- $($_.FullName)"
     Write-Host "  SHA-256: $hash"
 }

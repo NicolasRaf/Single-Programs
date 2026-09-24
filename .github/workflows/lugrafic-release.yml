@@ -1,0 +1,55 @@
+name: LuGrafic - Publicar release Windows
+
+on:
+  push:
+    tags:
+      - 'lugrafic-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-windows:
+    name: Compilar e publicar instaladores
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: LuGrafic
+
+    steps:
+      - name: Obter código-fonte
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: LuGrafic/package-lock.json
+
+      - name: Configurar Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Executar testes
+        run: npm test
+
+      - name: Compilar e publicar LuGrafic
+        uses: tauri-apps/tauri-action@action-v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: LuGrafic
+          tauriScript: npm run tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: 'LuGrafic v__VERSION__'
+          releaseBody: |
+            Instaladores do LuGrafic para Windows x64.
+
+            O arquivo `.exe` é o instalador recomendado. Consulte `LuGrafic/RELEASE_NOTES.md` para novidades e limitações.
+          generateReleaseNotes: true
+          releaseDraft: false
+          prerelease: false
+          uploadUpdaterJson: false
