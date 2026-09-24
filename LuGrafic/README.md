@@ -82,6 +82,8 @@ npm test
 npm run tauri -- build
 ```
 
+No Windows, também é possível executar `npm run setup:windows`. Esse comando roda os testes, recria os pacotes e, somente após um build bem-sucedido, exclui os instaladores de versões anteriores das pastas NSIS e MSI.
+
 Saídas: `src-tauri/target/release/bundle/nsis/` e `src-tauri/target/release/bundle/msi/`. Mantenha as versões de `package.json`, `src-tauri/Cargo.toml` e `src-tauri/tauri.conf.json` alinhadas. A atualização nesta versão é manual, baixando e executando o novo instalador; não há atualizador automático configurado.
 
 ## Integral e derivada
@@ -89,6 +91,12 @@ Saídas: `src-tauri/target/release/bundle/nsis/` e `src-tauri/target/release/bun
 Em funções cartesianas **2D**, use **∫** para integrar numericamente entre `a` e `b`, com área sombreada, e **f′** para exibir a derivada simbólica em relação a `x`, como curva tracejada. Os dois recursos podem ficar ativos simultaneamente. A expressão da derivada aparece abaixo da fórmula e seus pontos são incluídos na exportação CSV. Parâmetros, como `a` em `y = a*x^2`, são tratados como constantes na derivação.
 
 Não são oferecidos para curvas polares, paramétricas ou superfícies 3D. A derivação depende das funções suportadas pelo mathjs e informa erro quando não for possível. A integral é uma aproximação numérica (não uma primitiva simbólica); não utilize para integrais impróprias ou intervalos com singularidades. A notação `=` aceita definições explícitas (`y = ...`, `f(x) = ...`, `r = ...`, `z = ...`), não equações implícitas gerais como `x^2 + y^2 = 1`.
+
+## Termodinâmica
+
+O laboratório termodinâmico aceita os pares `P+T`, `P+V`, `T+V`, `P+v`, `P+h` e `P+s`, onde `V` é o volume total, `v` o volume específico, `h` a entalpia específica e `s` a entropia específica. A massa é usada para converter entre propriedades totais e específicas. Depois do cálculo, um diagrama interativo T–s mostra o estado sobre a envoltória de saturação aproximada da água ou sobre uma isóbara no modo de gás ideal.
+
+Os resultados são aproximações didáticas baseadas em calor específico, gás ideal, Antoine e correlação simplificada de calor latente. Não substituem tabelas de vapor, IAPWS-IF97 ou software certificado de engenharia.
 
 ## Licença
 

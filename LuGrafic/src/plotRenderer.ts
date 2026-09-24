@@ -22,7 +22,7 @@ const THEME = {
   bgPlot: 'rgba(10, 14, 26, 0)',
   gridColor: 'rgba(255, 255, 255, 0.06)',
   zeroLineColor: 'rgba(255, 255, 255, 0.12)',
-  textColor: '#8892a8',
+  textColor: '#a7afc0',
   fontFamily: "'Inter', sans-serif",
 };
 
@@ -59,7 +59,7 @@ function baseLayout(): Partial<Plotly.Layout> {
     font: {
       family: THEME.fontFamily,
       color: THEME.textColor,
-      size: 12,
+      size: 13,
     },
     margin: { l: 50, r: 30, t: 30, b: 50 },
     autosize: true,

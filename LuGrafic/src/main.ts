@@ -9,7 +9,7 @@ import './index.css';
 import { evaluateDerivative } from './mathEngine';
 import Plotly from 'plotly.js-dist-min';
 import { evaluateGrid2D, evaluateGrid3D, is3DExpression, extractParameters, calculateDefiniteIntegral, detectEquationType, evaluateParametric, evaluatePolar, findNotablePoints, calculateLinearRegression, findIntersections, normalizeExpression, type PlotData2D, type PlotData3D, type NotablePoint } from './mathEngine';
-import { calculateThermoState, type ThermoInput } from './thermoEngine';
+import { calculateThermoState, getSaturationDiagramData, type ThermoInput, type ThermoState } from './thermoEngine';
 import {
   renderPlot2D,
   renderPlot3D,
@@ -31,6 +31,7 @@ const $btn2D = document.getElementById('btn-2d') as HTMLButtonElement;
 const $btn3D = document.getElementById('btn-3d') as HTMLButtonElement;
 const $tabFunction = document.getElementById('tab-function') as HTMLButtonElement;
 const $tabCoordinates = document.getElementById('tab-coordinates') as HTMLButtonElement;
+const $workspaceGraph = document.getElementById('workspace-graph') as HTMLButtonElement;
 const $panelFunction = document.getElementById('panel-function') as HTMLDivElement;
 const $panelCoordinates = document.getElementById('panel-coordinates') as HTMLDivElement;
 const $equationList = document.getElementById('equation-list') as HTMLDivElement;
@@ -48,6 +49,7 @@ const $plotContainer = document.getElementById('plot-container') as HTMLDivEleme
 const $plotPlaceholder = document.getElementById('plot-placeholder') as HTMLDivElement;
 const $errorDisplay = document.getElementById('error-display') as HTMLDivElement;
 const $historyList = document.getElementById('history-list') as HTMLUListElement;
+const $btnClearHistory = document.getElementById('btn-clear-history') as HTMLButtonElement;
 const $rowZAxis = document.getElementById('row-z-axis') as HTMLDivElement;
 
 const $selectStyle2d = document.getElementById('select-style-2d') as HTMLSelectElement;
@@ -281,6 +283,32 @@ let history: HistoryEntry[] = [];
 let hasPlot = false;
 let lastPlot: LastPlot | null = null;
 let coordinateDraft: Array<{ x: string; y: string; z: string }> = [];
+const HISTORY_STORAGE_KEY = 'lugrafic.history.v1';
+
+function loadHistory(): HistoryEntry[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) ?? '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry): entry is HistoryEntry => {
+      if (!entry || typeof entry !== 'object') return false;
+      const candidate = entry as Partial<HistoryEntry>;
+      return typeof candidate.label === 'string'
+        && (candidate.mode === 'function' || candidate.mode === 'coordinates')
+        && (candidate.dimension === '2d' || candidate.dimension === '3d')
+        && typeof candidate.timestamp === 'number';
+    }).slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+function persistHistory(): void {
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+  } catch {
+    // O histórico é um recurso auxiliar; a plotagem não deve falhar por falta de cota local.
+  }
+}
 
 // ────────────────────────────────────────────────────────
 // Equation State Management
@@ -605,22 +633,24 @@ $btn3D.addEventListener('click', () => setDimension('3d'));
 
 const $tabThermo = document.getElementById('tab-thermo') as HTMLButtonElement;
 const $panelThermo = document.getElementById('panel-thermo') as HTMLDivElement;
+let lastGraphMode: Exclude<AppMode, 'thermo'> = 'function';
 
 function setMode(mode: AppMode): void {
   currentMode = mode;
+  if (mode !== 'thermo') lastGraphMode = mode;
+  const isThermo = mode === 'thermo';
+  document.body.classList.toggle('workspace-thermo', isThermo);
+  $workspaceGraph.classList.toggle('active', !isThermo);
+  $tabThermo.classList.toggle('active', isThermo);
+  $workspaceGraph.setAttribute('aria-pressed', String(!isThermo));
+  $tabThermo.setAttribute('aria-pressed', String(isThermo));
 
   $tabFunction.classList.toggle('active', mode === 'function');
   $tabCoordinates.classList.toggle('active', mode === 'coordinates');
-  $tabThermo.classList.toggle('active', mode === 'thermo');
 
   $panelFunction.classList.toggle('hidden', mode !== 'function');
   $panelCoordinates.classList.toggle('hidden', mode !== 'coordinates');
   $panelThermo.classList.toggle('hidden', mode !== 'thermo');
-  const plotButtonText = $btnPlot.childNodes[$btnPlot.childNodes.length - 1];
-  if (plotButtonText?.nodeType === Node.TEXT_NODE) {
-    plotButtonText.textContent = mode === 'thermo' ? ' Calcular Estado' : ' Plotar Gráfico';
-  }
-
   if (mode === 'function') {
     if (activeEquationInput) {
       activeEquationInput.focus();
@@ -634,6 +664,7 @@ function setMode(mode: AppMode): void {
 $tabFunction.addEventListener('click', () => setMode('function'));
 $tabCoordinates.addEventListener('click', () => setMode('coordinates'));
 $tabThermo.addEventListener('click', () => setMode('thermo'));
+$workspaceGraph.addEventListener('click', () => setMode(lastGraphMode));
 
 // ────────────────────────────────────────────────────────
 // Thermodynamic Calculator Logic
@@ -644,19 +675,85 @@ $tabThermo.addEventListener('click', () => setMode('thermo'));
   const $thermoPRow = document.getElementById('thermo-p-row') as HTMLDivElement;
   const $thermoTRow = document.getElementById('thermo-t-row') as HTMLDivElement;
   const $thermoVRow = document.getElementById('thermo-v-row') as HTMLDivElement;
+  const $thermoSpecVolRow = document.getElementById('thermo-specvol-row') as HTMLDivElement;
+  const $thermoHRow = document.getElementById('thermo-h-row') as HTMLDivElement;
+  const $thermoSRow = document.getElementById('thermo-s-row') as HTMLDivElement;
   const $btnCalcThermo = document.getElementById('btn-calc-thermo') as HTMLButtonElement;
+  const $thermoResults = document.getElementById('thermo-results') as HTMLDivElement;
+  const $thermoEmpty = document.getElementById('thermo-empty') as HTMLDivElement;
+  const $thermoVisual = document.getElementById('thermo-visual') as HTMLDivElement;
+  const $thermoChart = document.getElementById('thermo-chart') as HTMLDivElement;
+  let hasThermoResult = false;
+
+  const clearThermoOutput = (message = 'Fase, volume, entalpia e entropia aparecerão aqui.'): void => {
+    $thermoResults.classList.add('hidden');
+    $thermoVisual.classList.add('hidden');
+    $thermoEmpty.classList.remove('hidden');
+    const description = $thermoEmpty.querySelector('p');
+    if (description) description.textContent = message;
+    Plotly.purge($thermoChart);
+    hasThermoResult = false;
+  };
 
   // Show/hide inputs based on input type selection
   $thermoInputType.addEventListener('change', () => {
     const type = $thermoInputType.value;
     $thermoPRow.classList.toggle('hidden', type === 'TV');
-    $thermoTRow.classList.toggle('hidden', type === 'PV');
-    $thermoVRow.classList.toggle('hidden', type === 'PT');
+    $thermoTRow.classList.toggle('hidden', !['PT', 'TV'].includes(type));
+    $thermoVRow.classList.toggle('hidden', !['PV', 'TV'].includes(type));
+    $thermoSpecVolRow.classList.toggle('hidden', type !== 'Pv');
+    $thermoHRow.classList.toggle('hidden', type !== 'Ph');
+    $thermoSRow.classList.toggle('hidden', type !== 'Ps');
   });
 
-  $btnCalcThermo.addEventListener('click', () => {
+  $panelThermo.addEventListener('input', () => {
+    if (hasThermoResult) clearThermoOutput('Entradas alteradas. Calcule novamente para atualizar o estado.');
+  });
+  $panelThermo.addEventListener('change', () => {
+    if (hasThermoResult) clearThermoOutput('Entradas alteradas. Calcule novamente para atualizar o estado.');
+  });
+
+  const renderThermoDiagram = async (state: ThermoState): Promise<void> => {
+    const dome = getSaturationDiagramData();
+    const phaseColors: Record<ThermoState['phase'], string> = {
+      líquido: '#00d4ff', vapor: '#ff0055', saturado: '#f59e0b', 'gás ideal': '#9d00ff'
+    };
+    const color = phaseColors[state.phase];
+    const chart = document.getElementById('thermo-chart') as HTMLDivElement;
+    const guideTraces: Partial<Plotly.PlotData>[] = state.phase === 'gás ideal'
+      ? [{
+          x: Array.from({ length: 61 }, (_, index) => {
+            const temperatureK = 173.15 + index * 10;
+            return 2.01 * Math.log(temperatureK / 273.15) - 0.4615 * Math.log(state.pressure / 101.325);
+          }),
+          y: Array.from({ length: 61 }, (_, index) => -100 + index * 10),
+          type: 'scatter', mode: 'lines', line: { color: 'rgba(157,0,255,.5)', width: 2, dash: 'dot' },
+          name: 'Isóbara aproximada', hovertemplate: 'Isóbara<br>s: %{x:.3f}<br>T: %{y:.1f} °C<extra></extra>'
+        }]
+      : [
+          { x: dome.liquid.entropy, y: dome.liquid.temperature, type: 'scatter', mode: 'lines', line: { color: 'rgba(0,212,255,.55)', width: 2 }, name: 'Líquido saturado', hovertemplate: 's: %{x:.3f}<br>T: %{y:.1f} °C<extra></extra>' },
+          { x: dome.vapor.entropy, y: dome.vapor.temperature, type: 'scatter', mode: 'lines', fill: 'tonextx', fillcolor: 'rgba(245,158,11,.06)', line: { color: 'rgba(255,0,85,.55)', width: 2 }, name: 'Vapor saturado', hovertemplate: 's: %{x:.3f}<br>T: %{y:.1f} °C<extra></extra>' }
+        ];
+    await Plotly.newPlot(chart, [
+      ...guideTraces,
+      { x: [state.entropy], y: [state.temperature], type: 'scatter', mode: 'markers', marker: { color, size: 15, line: { color: '#fff', width: 2.5 } }, name: 'Estado', hovertemplate: `<b>${state.phase}</b><br>s: %{x:.4f} kJ/(kg·K)<br>T: %{y:.2f} °C<extra></extra>` }
+    ] as Plotly.Data[], {
+      margin: { l: 50, r: 16, t: 12, b: 42 },
+      paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { family: 'Inter, sans-serif', color: '#c2c8d4', size: 13 },
+      xaxis: { title: { text: 's [kJ/(kg·K)]' }, gridcolor: 'rgba(255,255,255,.06)', zeroline: false },
+      yaxis: { title: { text: 'T [°C]' }, gridcolor: 'rgba(255,255,255,.06)', zeroline: false },
+      showlegend: false, hovermode: 'closest', autosize: true,
+    }, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
+    document.getElementById('thermo-visual')?.classList.remove('hidden');
+    const chip = document.getElementById('thermo-phase-chip') as HTMLSpanElement;
+    chip.textContent = state.phase;
+    chip.style.setProperty('--phase-color', color);
+  };
+
+  $btnCalcThermo.addEventListener('click', async () => {
     const substance = (document.getElementById('thermo-substance') as HTMLSelectElement).value as 'water' | 'ideal';
-    const type = $thermoInputType.value as 'PT' | 'PV' | 'TV';
+    const type = $thermoInputType.value as ThermoInput['type'];
     const readInput = (id: string): number => {
       const raw = (document.getElementById(id) as HTMLInputElement).value.trim();
       return raw === '' ? NaN : Number(raw);
@@ -665,15 +762,22 @@ $tabThermo.addEventListener('click', () => setMode('thermo'));
     const temperature = readInput('thermo-temperature');
     const volume = readInput('thermo-volume');
     const mass = readInput('thermo-mass');
+    const specificVolume = readInput('thermo-specific-volume');
+    const enthalpy = readInput('thermo-enthalpy');
+    const entropy = readInput('thermo-entropy');
 
-    const input: ThermoInput = { type, pressure, temperature, volume, mass, substance };
+    const input: ThermoInput = { type, pressure, temperature, volume, specificVolume, enthalpy, entropy, mass, substance };
 
     try {
+      $btnCalcThermo.disabled = true;
+      $btnCalcThermo.setAttribute('aria-busy', 'true');
       hideError();
       const state = calculateThermoState(input);
+      await renderThermoDiagram(state);
 
-      const $results = document.getElementById('thermo-results') as HTMLDivElement;
-      $results.classList.remove('hidden');
+      $thermoResults.classList.remove('hidden');
+      $thermoEmpty.classList.add('hidden');
+      hasThermoResult = true;
 
       (document.getElementById('thermo-res-phase') as HTMLSpanElement).textContent = state.phase;
       (document.getElementById('thermo-res-pressure') as HTMLSpanElement).textContent = `${state.pressure.toFixed(2)} kPa`;
@@ -692,8 +796,11 @@ $tabThermo.addEventListener('click', () => setMode('thermo'));
         $warnings.textContent = '';
       }
     } catch (err) {
-      (document.getElementById('thermo-results') as HTMLDivElement).classList.add('hidden');
+      clearThermoOutput('Revise os valores informados e tente novamente.');
       showError('Erro no cálculo termodinâmico: ' + (err as Error).message);
+    } finally {
+      $btnCalcThermo.disabled = false;
+      $btnCalcThermo.removeAttribute('aria-busy');
     }
   });
 }
@@ -995,11 +1102,13 @@ function addToHistory(): void {
   history.unshift(entry);
   if (history.length > 20) history.pop();
 
+  persistHistory();
   renderHistory();
 }
 
 function renderHistory(): void {
   $historyList.innerHTML = '';
+  $btnClearHistory.disabled = history.length === 0;
 
   if (history.length === 0) {
     const li = document.createElement('li');
@@ -1012,12 +1121,15 @@ function renderHistory(): void {
   for (const entry of history) {
     const li = document.createElement('li');
     li.className = 'history-item';
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+    li.title = `Restaurar • ${new Date(entry.timestamp).toLocaleString('pt-BR')}`;
     li.innerHTML = `
       <span class="history-dot"></span>
       <span class="history-expr">${escapeHtml(entry.label)}</span>
       <span class="history-dim ${entry.dimension === '3d' ? 'dim-3d' : ''}">${entry.dimension.toUpperCase()}</span>
     `;
-    li.addEventListener('click', () => {
+    const restoreEntry = () => {
       setDimension(entry.dimension);
       if (entry.mode === 'function' && entry.equations) {
         equations = entry.equations.map(eq => ({ ...eq, id: generateId(), integral: eq.integral ? { ...eq.integral } : undefined }));
@@ -1034,10 +1146,23 @@ function renderHistory(): void {
         setCoordSubtab('table');
         plotCoordinatesFromTable();
       }
+    };
+    li.addEventListener('click', restoreEntry);
+    li.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        restoreEntry();
+      }
     });
     $historyList.appendChild(li);
   }
 }
+
+$btnClearHistory.addEventListener('click', () => {
+  history = [];
+  persistHistory();
+  renderHistory();
+});
 
 function escapeHtml(str: string): string {
   const div = document.createElement('div');
@@ -1079,8 +1204,6 @@ async function plotFunction(): Promise<void> {
 
   try {
     const { xMin, xMax, yMin, yMax, zMin, zMax, steps } = getAxisValues();
-    hidePlaceholder();
-
     if (is3D) {
       const style3d = $selectStyle3d.value as PlotStyle3D;
       const items = validEquations.map(eq => ({
@@ -1102,6 +1225,9 @@ async function plotFunction(): Promise<void> {
         } else if (type === 'polar') {
           plotData = evaluatePolar(eq.expr, 0, 2 * Math.PI, steps, currentParameters);
         } else {
+          if (is3DExpression(eq.expr)) {
+            throw new Error(`A fórmula “${eq.expr}” contém 'y' (superfície 3D). Mude para o modo 3D para visualizá-la.`);
+          }
           plotData = evaluateGrid2D(eq.expr, xMin, xMax, steps, currentParameters);
           if ($toggleAnalysis && $toggleAnalysis.checked) {
             notable = findNotablePoints(plotData, eq.expr, currentParameters);
@@ -1157,6 +1283,7 @@ async function plotFunction(): Promise<void> {
       ]), series3d: [] };
     }
 
+    hidePlaceholder();
     hasPlot = true;
     addToHistory();
   } catch (err: unknown) {
@@ -1171,7 +1298,6 @@ async function plotCoordinatesFromTable(): Promise<void> {
   try {
     const parsed = getValidatedTableCoordinates();
     if (parsed.x.length < 2) throw new Error('Insira pelo menos 2 pontos completos.');
-    hidePlaceholder();
     resetColorCycle();
 
     if (currentDimension === '3d') {
@@ -1206,6 +1332,7 @@ async function plotCoordinatesFromTable(): Promise<void> {
       lastPlot = { mode: 'coordinates', dimension: '2d', x: [...x], y: [...y] };
     }
 
+    hidePlaceholder();
     hasPlot = true;
     addToHistory();
   } catch (err: unknown) {
@@ -1224,7 +1351,6 @@ async function plotCoordinatesFromPaste(): Promise<void> {
   }
 
   try {
-    hidePlaceholder();
     resetColorCycle();
 
     const result = parseCoordinates(text);
@@ -1267,6 +1393,7 @@ async function plotCoordinatesFromPaste(): Promise<void> {
       lastPlot = { mode: 'coordinates', dimension: '2d', x: [...result.data2d.x], y: [...result.data2d.y] };
     }
 
+    hidePlaceholder();
     hasPlot = true;
     addToHistory();
   } catch (err: unknown) {
@@ -1279,15 +1406,35 @@ async function plotCoordinatesFromPaste(): Promise<void> {
 // Main Plot Dispatch
 // ────────────────────────────────────────────────────────
 
-function handlePlot(): void {
-  if (currentMode === 'function') {
-    plotFunction();
-  } else if (currentMode === 'thermo') {
-    (document.getElementById('btn-calc-thermo') as HTMLButtonElement).click();
-  } else if (currentCoordSubtab === 'table') {
-    plotCoordinatesFromTable();
-  } else {
-    plotCoordinatesFromPaste();
+let plotting = false;
+let plotQueued = false;
+
+async function handlePlot(): Promise<void> {
+  if (plotting) {
+    plotQueued = true;
+    return;
+  }
+  plotting = true;
+  $btnPlot.disabled = true;
+  $btnPlot.setAttribute('aria-busy', 'true');
+  try {
+    if (currentMode === 'function') {
+      await plotFunction();
+    } else if (currentMode === 'thermo') {
+      (document.getElementById('btn-calc-thermo') as HTMLButtonElement).click();
+    } else if (currentCoordSubtab === 'table') {
+      await plotCoordinatesFromTable();
+    } else {
+      await plotCoordinatesFromPaste();
+    }
+  } finally {
+    plotting = false;
+    $btnPlot.disabled = false;
+    $btnPlot.removeAttribute('aria-busy');
+    if (plotQueued) {
+      plotQueued = false;
+      void handlePlot();
+    }
   }
 }
 
@@ -1317,7 +1464,7 @@ function handleClearAll(): void {
 // Event Listeners
 // ────────────────────────────────────────────────────────
 
-$btnPlot.addEventListener('click', handlePlot);
+$btnPlot.addEventListener('click', () => { void handlePlot(); });
 $btnClearAll.addEventListener('click', handleClearAll);
 
 // Auto-update plot when styling/analysis/axes settings change
@@ -1389,5 +1536,6 @@ $btnPlot.addEventListener(
 // Initialize coordinate table with 5 empty rows
 for (let i = 0; i < 5; i++) addTableRow();
 
-// Initialize history
+// Restore persisted history
+history = loadHistory();
 renderHistory();

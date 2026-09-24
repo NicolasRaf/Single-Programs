@@ -7,9 +7,10 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "set NODE_OPTIONS=--max-old-space-size=4096 && vite",
+    "build": "set NODE_OPTIONS=--max-old-space-size=4096 && tsc && vite build",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "setup:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/rebuild-setup.ps1",
     "preview": "vite preview",
     "tauri": "tauri"
   },

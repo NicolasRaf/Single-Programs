@@ -30,6 +30,16 @@
           </div>
           <h1>LuGrafic</h1>
         </div>
+        <nav class="workspace-tabs" aria-label="Área de trabalho">
+          <button class="workspace-tab active" id="workspace-graph" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"></polyline></svg>
+            Gráficos
+          </button>
+          <button class="workspace-tab" id="tab-thermo" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"></path></svg>
+            Termodinâmica
+          </button>
+        </nav>
         <div class="header-actions">
           <button id="btn-download-csv" class="btn-ghost" title="Exportar Tabela CSV">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -91,7 +101,7 @@
             </div>
           </div>
 
-          <!-- Mode Toggle (Função / Coordenadas / Termodinâmica) -->
+          <!-- Mode Toggle (Função / Coordenadas) -->
           <div class="panel" id="panel-mode">
             <div class="mode-tabs">
               <button class="mode-tab active" data-mode="function" id="tab-function">
@@ -110,7 +120,7 @@
                 </svg>
                 Coordenadas
               </button>
-              <button class="mode-tab" data-mode="thermo" id="tab-thermo">
+              <button class="mode-tab legacy-thermo-tab" data-mode="thermo" aria-hidden="true" tabindex="-1">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>
                 </svg>
@@ -121,14 +131,20 @@
 
           <!-- Thermodynamic State Calculator Panel -->
           <div class="panel hidden" id="panel-thermo">
-            <div class="panel-label">
-              <span class="label-icon" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">ΔH</span>
-              Cálculo de Estado
+            <div class="thermo-heading">
+              <div>
+                <span class="workspace-eyebrow">Laboratório termodinâmico</span>
+                <h2>Estado e propriedades</h2>
+                <p>Informe duas propriedades independentes e obtenha uma estimativa do estado da substância.</p>
+              </div>
+              <span class="thermo-model-badge">Modelo didático</span>
             </div>
 
             <div class="thermo-form">
+              <div class="thermo-controls-card">
+              <div class="thermo-card-title">Condições de entrada</div>
               <div class="thermo-row">
-                <label class="thermo-label">Substância</label>
+                <label class="thermo-label" for="thermo-substance">Substância</label>
                 <select id="thermo-substance" class="style-select">
                   <option value="water">Água (H₂O)</option>
                   <option value="ideal">Gás Ideal</option>
@@ -136,33 +152,51 @@
               </div>
 
               <div class="thermo-row">
-                <label class="thermo-label">Variáveis de Entrada</label>
+                <label class="thermo-label" for="thermo-input-type">Variáveis de entrada</label>
                 <select id="thermo-input-type" class="style-select">
                   <option value="PT">Pressão + Temperatura</option>
                   <option value="PV">Pressão + Volume</option>
                   <option value="TV">Temperatura + Volume</option>
+                  <option value="Pv">Pressão + Volume específico</option>
+                  <option value="Ph">Pressão + Entalpia</option>
+                  <option value="Ps">Pressão + Entropia</option>
                 </select>
               </div>
 
               <div class="thermo-inputs">
                 <div class="thermo-input-row" id="thermo-p-row">
                   <span class="thermo-input-label">P</span>
-                  <input type="number" id="thermo-pressure" class="input-axis" value="101.325" step="0.1" />
+                  <input type="number" id="thermo-pressure" class="input-axis" value="101.325" step="0.1" aria-label="Pressão em quilopascais" />
                   <span class="thermo-unit">kPa</span>
                 </div>
                 <div class="thermo-input-row" id="thermo-t-row">
                   <span class="thermo-input-label">T</span>
-                  <input type="number" id="thermo-temperature" class="input-axis" value="25" step="1" />
+                  <input type="number" id="thermo-temperature" class="input-axis" value="25" step="1" aria-label="Temperatura em graus Celsius" />
                   <span class="thermo-unit">°C</span>
                 </div>
                 <div class="thermo-input-row hidden" id="thermo-v-row">
                   <span class="thermo-input-label">V</span>
-                  <input type="number" id="thermo-volume" class="input-axis" value="1" step="0.01" />
+                  <input type="number" id="thermo-volume" class="input-axis" value="1" step="0.01" aria-label="Volume total em metros cúbicos" />
                   <span class="thermo-unit">m³</span>
+                </div>
+                <div class="thermo-input-row hidden" id="thermo-specvol-row">
+                  <span class="thermo-input-label">v</span>
+                  <input type="number" id="thermo-specific-volume" class="input-axis" value="1.673" step="0.001" aria-label="Volume específico em metros cúbicos por quilograma" />
+                  <span class="thermo-unit">m³/kg</span>
+                </div>
+                <div class="thermo-input-row hidden" id="thermo-h-row">
+                  <span class="thermo-input-label">h</span>
+                  <input type="number" id="thermo-enthalpy" class="input-axis" value="2676" step="1" aria-label="Entalpia em quilojoules por quilograma" />
+                  <span class="thermo-unit">kJ/kg</span>
+                </div>
+                <div class="thermo-input-row hidden" id="thermo-s-row">
+                  <span class="thermo-input-label">s</span>
+                  <input type="number" id="thermo-entropy" class="input-axis" value="7.355" step="0.001" aria-label="Entropia em quilojoules por quilograma kelvin" />
+                  <span class="thermo-unit">kJ/kg·K</span>
                 </div>
                 <div class="thermo-input-row">
                   <span class="thermo-input-label">m</span>
-                  <input type="number" id="thermo-mass" class="input-axis" value="1" step="0.1" />
+                  <input type="number" id="thermo-mass" class="input-axis" value="1" step="0.1" aria-label="Massa em quilogramas" />
                   <span class="thermo-unit">kg</span>
                 </div>
               </div>
@@ -173,7 +207,21 @@
                 </svg>
                 Calcular Estado
               </button>
+              </div>
 
+              <div class="thermo-output-card">
+              <div id="thermo-visual" class="thermo-visual hidden">
+                <div class="thermo-visual-header">
+                  <div><strong>Diagrama T–s</strong><span>Temperatura × entropia específica</span></div>
+                  <span id="thermo-phase-chip" class="thermo-phase-chip">—</span>
+                </div>
+                <div id="thermo-chart" class="thermo-chart" aria-label="Diagrama termodinâmico temperatura-entropia"></div>
+              </div>
+              <div id="thermo-empty" class="thermo-empty">
+                <span class="thermo-empty-icon">Δ</span>
+                <strong>Pronto para calcular</strong>
+                <p>Fase, volume, entalpia e entropia aparecerão aqui.</p>
+              </div>
               <div id="thermo-results" class="thermo-results hidden">
                 <div class="thermo-result-header">Propriedades do Estado</div>
                 <div class="thermo-result-row">
@@ -205,6 +253,7 @@
                   <span class="thermo-result-value" id="thermo-res-entropy">—</span>
                 </div>
                 <div id="thermo-warnings" class="thermo-warnings hidden"></div>
+              </div>
               </div>
             </div>
           </div>
@@ -473,6 +522,10 @@
               <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </div>
             <div class="panel-content collapsed" id="content-history">
+              <div class="history-toolbar">
+                <span>Salvo neste dispositivo</span>
+                <button id="btn-clear-history" class="history-clear" type="button">Limpar</button>
+              </div>
               <ul id="history-list" class="history-list">
                 <li class="history-empty">Nenhuma equação plotada ainda</li>
               </ul>
