@@ -87,10 +87,11 @@ function hexToRgba(hex: string, alpha: number): string {
  */
 export async function renderPlot2D(
   container: HTMLElement,
-  items: { data: PlotData2D; exprLabel: string; color: string; integral?: { data: PlotData2D }; notablePoints?: NotablePoint[] }[],
+  items: { data: PlotData2D; exprLabel: string; color: string; integral?: { data: PlotData2D }; derivative?: { expression: string; data: PlotData2D }; notablePoints?: NotablePoint[] }[],
   style: PlotStyle2D = 'lines',
   append = false,
-  axisTypes?: { x: 'linear' | 'log', y: 'linear' | 'log' }
+  axisTypes?: { x: 'linear' | 'log', y: 'linear' | 'log' },
+  ranges?: { x: [number, number]; y: [number, number] }
 ): Promise<void> {
   const traces: Partial<Plotly.PlotData>[] = [];
   
@@ -123,6 +124,18 @@ export async function renderPlot2D(
       connectgaps: false,
     });
     
+    if (item.derivative) {
+      traces.push({
+        x: item.derivative.data.x,
+        y: item.derivative.data.y,
+        type: 'scatter',
+        mode: 'lines',
+        name: `f′(x) = ${item.derivative.expression}`,
+        line: { color, width: 2, dash: 'dash', shape: 'linear' },
+        hovertemplate: 'Derivada<br>x: %{x:.4f}<br>f′(x): %{y:.4f}<extra></extra>',
+        connectgaps: false,
+      });
+    }
     if (item.integral) {
       traces.push({
         x: item.integral.data.x,
@@ -170,6 +183,7 @@ export async function renderPlot2D(
       zerolinewidth: 1,
       showgrid: true,
       showline: false,
+      range: axisTypes?.x === 'log' ? undefined : ranges?.x,
     },
     yaxis: {
       type: axisTypes?.y || 'linear',
@@ -178,6 +192,7 @@ export async function renderPlot2D(
       zerolinewidth: 1,
       showgrid: true,
       showline: false,
+      range: axisTypes?.y === 'log' ? undefined : ranges?.y,
     },
     hovermode: 'closest' as const,
     dragmode: 'pan' as const,
@@ -279,7 +294,7 @@ export async function renderScatter2D(
     displayModeBar: true,
   };
 
-  await Plotly.newPlot(container, [trace], layout, config);
+  await Plotly.newPlot(container, traces as Plotly.PlotData[], layout, config);
 }
 
 /**
@@ -292,7 +307,8 @@ export async function renderScatter2D(
 export async function renderPlot3D(
   container: HTMLElement,
   items: { data: PlotData3D; exprLabel: string; color: string }[],
-  style: PlotStyle3D = 'surface'
+  style: PlotStyle3D = 'surface',
+  ranges?: { x: [number, number]; y: [number, number]; z: [number, number] }
 ): Promise<void> {
   const traces: any[] = items.map(item => {
     // Generate a monochromatic colorscale from the equation's chosen color
@@ -350,18 +366,21 @@ export async function renderPlot3D(
         zerolinecolor: THEME.zeroLineColor,
         showbackground: false,
         title: { text: 'X' },
+        range: ranges?.x,
       },
       yaxis: {
         gridcolor: THEME.gridColor,
         zerolinecolor: THEME.zeroLineColor,
         showbackground: false,
         title: { text: 'Y' },
+        range: ranges?.y,
       },
       zaxis: {
         gridcolor: THEME.gridColor,
         zerolinecolor: THEME.zeroLineColor,
         showbackground: false,
         title: { text: 'Z' },
+        range: ranges?.z,
       },
       camera: {
         eye: { x: 1.5, y: 1.5, z: 1.2 },

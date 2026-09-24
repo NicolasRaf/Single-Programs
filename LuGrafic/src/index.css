@@ -253,6 +253,7 @@ body::before {
 /* --- Mode Tabs --- */
 .mode-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   background: var(--bg-primary);
   border-radius: var(--radius-sm);
@@ -1054,6 +1055,25 @@ body::before {
   min-width: 0;
 }
 
+.equation-input.invalid {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
+}
+
+.input-hint code {
+  color: var(--accent-tertiary);
+  font-family: var(--font-mono);
+}
+
+.panel-label.collapsible:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent-tertiary);
+  outline-offset: 2px;
+}
+
 .btn-remove-eq {
   color: var(--text-muted);
   background: none;
@@ -1164,6 +1184,9 @@ body::before {
 
 /* --- Integrais (Phase 2) --- */
 .btn-integral-eq {
+  min-width: 28px;
+  min-height: 32px;
+  flex-shrink: 0;
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -1173,6 +1196,18 @@ body::before {
   padding: 0 4px;
   transition: color var(--duration-fast);
 }
+
+.derivative-panel {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-secondary, #aab5cb);
+  overflow-wrap: anywhere;
+}
+
+.derivative-panel[hidden], .integral-panel[hidden] { display: none; }
+
+.btn-integral-eq[aria-pressed="true"] { color: #00d4ff; background: #00d4ff22; }
+.btn-integral-eq:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .btn-integral-eq:hover {
   color: var(--accent-secondary);

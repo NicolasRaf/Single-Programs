@@ -29,24 +29,23 @@ export interface ParseResult {
  * Detecta automaticamente o separador usado no texto.
  * Prioridade: tab > ponto-e-vírgula > vírgula > espaços múltiplos
  */
-function detectSeparator(text: string): RegExp {
+function detectSeparator(text: string): { separator: RegExp; decimalComma: boolean } {
   const firstDataLine = text
     .split('\n')
     .map((l) => l.trim())
     .find((l) => l.length > 0 && /\d/.test(l));
 
-  if (!firstDataLine) return /[\t,;]\s*/;
+  if (!firstDataLine) return { separator: /;/, decimalComma: true };
 
-  if (firstDataLine.includes('\t')) return /\t+/;
-  if (firstDataLine.includes(';')) return /\s*;\s*/;
+  if (firstDataLine.includes('\t')) return { separator: /\t/, decimalComma: true };
+  if (firstDataLine.includes(';')) return { separator: /;/, decimalComma: true };
+  if (/,\s+/.test(firstDataLine)) return { separator: /\s*,\s*/, decimalComma: false };
 
-  // For comma: need to distinguish between decimal comma and separator comma
-  // If a line has multiple commas, they're separators
-  const commaCount = (firstDataLine.match(/,/g) || []).length;
-  if (commaCount >= 1) return /\s*,\s*/;
+  // Espaços permitem vírgula decimal: "1,5 2,5".
+  if (/\s+/.test(firstDataLine)) return { separator: /\s+/, decimalComma: true };
 
-  // Multiple spaces as separator
-  return /\s+/;
+  // CSV separado por vírgula exige ponto como separador decimal.
+  return { separator: /,/, decimalComma: false };
 }
 
 /**
@@ -66,15 +65,14 @@ function isHeaderLine(line: string): boolean {
 /**
  * Converte uma string numérica para number, tratando vírgula decimal.
  */
-function parseNumber(str: string): number {
+export function parseLocaleNumber(str: string, decimalComma = true): number {
   let cleaned = str.trim();
-  // If the string uses comma as decimal separator (e.g., "3,14")
-  // But only if there's exactly one comma and no dots
-  if (cleaned.includes(',') && !cleaned.includes('.') && (cleaned.match(/,/g) || []).length === 1) {
+  if (decimalComma && /^[-+]?\d+,\d+(?:[eE][-+]?\d+)?$/.test(cleaned)) {
     cleaned = cleaned.replace(',', '.');
   }
-  const num = parseFloat(cleaned);
-  return num;
+  if (!/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?$/.test(cleaned)) return NaN;
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : NaN;
 }
 
 /**
@@ -105,21 +103,24 @@ export function parseCoordinates(text: string): ParseResult {
     throw new Error('Nenhum ponto numérico encontrado. Verifique o formato dos dados.');
   }
 
-  const separator = detectSeparator(dataLines.join('\n'));
+  const { separator, decimalComma } = detectSeparator(dataLines.join('\n'));
 
   // Parse all lines
   const rows: number[][] = [];
   for (let i = 0; i < dataLines.length; i++) {
-    const parts = dataLines[i].split(separator).filter((p) => p.trim().length > 0);
-    const nums = parts.map(parseNumber);
-
-    // Validate that all parts are actual numbers
-    const validNums = nums.filter((n) => !isNaN(n));
-    if (validNums.length < 2) {
-      continue; // Skip lines with less than 2 valid numbers
+    const parts = dataLines[i].split(separator);
+    if (parts.length !== 2 && parts.length !== 3) {
+      throw new Error(`Linha ${i + 1}: esperado 2 ou 3 valores, encontrados ${parts.length}.`);
     }
-
-    rows.push(validNums);
+    if (parts.some((part) => part.trim() === '')) {
+      throw new Error(`Linha ${i + 1}: há uma coordenada vazia.`);
+    }
+    const nums = parts.map((part) => parseLocaleNumber(part, decimalComma));
+    const invalidIndex = nums.findIndex((value) => !Number.isFinite(value));
+    if (invalidIndex >= 0) {
+      throw new Error(`Linha ${i + 1}, coluna ${invalidIndex + 1}: número inválido.`);
+    }
+    rows.push(nums);
   }
 
   if (rows.length === 0) {
@@ -129,7 +130,11 @@ export function parseCoordinates(text: string): ParseResult {
   }
 
   // Determine dimension based on column count
-  const maxCols = Math.max(...rows.map((r) => r.length));
+  const maxCols = rows[0].length;
+  const inconsistentRow = rows.findIndex((row) => row.length !== maxCols);
+  if (inconsistentRow >= 0) {
+    throw new Error(`Linha ${inconsistentRow + 1}: todas as linhas devem ter ${maxCols} coordenadas.`);
+  }
 
   if (maxCols >= 3) {
     // 3D data

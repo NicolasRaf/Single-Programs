@@ -1,10 +1,10 @@
 [package]
 name = "app"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+version = "0.2.0"
+description = "LuGrafic - visualizador matemático interativo"
+authors = ["NicolasRaf"]
 license = ""
-repository = ""
+repository = "https://github.com/NicolasRaf/Single-Programs"
 edition = "2021"
 rust-version = "1.77.2"
 

@@ -5,7 +5,51 @@
  * digitadas pelo usuário, sem uso de eval().
  */
 
-import { compile, parse, type EvalFunction } from 'mathjs';
+import { compile, parse, derivative, type EvalFunction } from 'mathjs';
+
+const RESERVED_SYMBOLS = new Set(['x', 'y', 'z', 't', 'theta', 'pi', 'e', 'i', 'Infinity', 'NaN']);
+
+function splitTopLevel(value: string, separator = ','): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if ('([{'.includes(char)) depth++;
+    else if (')]}'.includes(char)) depth--;
+    else if (char === separator && depth === 0) {
+      parts.push(value.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(value.slice(start).trim());
+  return parts;
+}
+
+/** Normaliza notação comum da UI e remove o lado dependente de uma igualdade. */
+export function normalizeExpression(expression: string): string {
+  let expr = expression.trim()
+    .replace(/[−–—]/g, '-')
+    .replace(/[×·]/g, '*')
+    .replace(/÷/g, '/')
+    .replace(/π/g, 'pi')
+    .replace(/θ/g, 'theta')
+    .replace(/√\s*\(/g, 'sqrt(');
+
+  const equality = splitTopLevel(expr, '=');
+  if (equality.length === 2) {
+    const lhs = equality[0].replace(/\s+/g, '').toLowerCase();
+    const rhs = equality[1];
+    if (/^(y|z|r|f\(x\)|g\(x\)|h\(x\)|f\(x,y\))$/.test(lhs)) {
+      expr = rhs;
+    } else {
+      throw new Error('Use a igualdade como y = f(x), f(x) = ..., r = f(theta) ou z = f(x,y).');
+    }
+  } else if (equality.length > 1) {
+    throw new Error('A fórmula deve conter no máximo um sinal de igualdade.');
+  }
+  return expr.trim();
+}
 
 /** Resultado da avaliação para gráficos 2D */
 export interface PlotData2D {
@@ -25,14 +69,30 @@ export interface PlotData3D {
  * Lança erro com mensagem amigável se a expressão for inválida.
  */
 export function compileExpression(expr: string): EvalFunction {
-  const trimmed = expr.trim();
+  const trimmed = normalizeExpression(expr);
   if (!trimmed) {
     throw new Error('A expressão está vazia. Digite algo como sin(x) ou x^2.');
   }
+  if (trimmed.length > 500) throw new Error('A fórmula é muito longa. Use até 500 caracteres.');
   try {
+    const ast = parse(trimmed);
+    let nodeCount = 0;
+    // @ts-ignore: a API de travessia do AST do math.js possui tipagem incompleta.
+    ast.traverse((node: any) => {
+      nodeCount++;
+      if (node.isAssignmentNode || node.isFunctionAssignmentNode || node.isBlockNode ||
+          node.isArrayNode || node.isRangeNode || node.isObjectNode || node.isAccessorNode) {
+        throw new Error('Use apenas uma expressão escalar, sem atribuições, listas, intervalos ou acesso a propriedades.');
+      }
+      if (node.isFunctionNode && ['import', 'createUnit', 'evaluate', 'parse', 'simplify', 'derivative', 'resolve'].includes(node.fn?.name)) {
+        throw new Error(`A função ${node.fn.name} não é permitida.`);
+      }
+    });
+    if (nodeCount > 200) throw new Error('A fórmula é complexa demais. Simplifique a expressão.');
     return compile(trimmed);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+    if (message.startsWith('Use apenas') || message.startsWith('A função') || message.startsWith('A fórmula')) throw err;
     throw new Error(`Erro de sintaxe na expressão: ${message}`);
   }
 }
@@ -44,7 +104,33 @@ export function compileExpression(expr: string): EvalFunction {
 export function is3DExpression(expr: string): boolean {
   // Match isolated 'y' that isn't part of a function name
   // Negative lookbehind for letters, negative lookahead for letters
-  return /(?<![a-zA-Z])y(?![a-zA-Z(])/.test(expr);
+  try {
+    const normalized = normalizeExpression(expr);
+    return /^\s*(z|f\s*\(\s*x\s*,\s*y\s*\))\s*=/.test(expr) || /(?<![a-zA-Z])y(?![a-zA-Z(])/.test(normalized);
+  } catch {
+    return false;
+  }
+}
+
+/** Derivada simbólica em x; os demais parâmetros são tratados como constantes. */
+export function evaluateDerivative(
+  expr: string, xMin: number, xMax: number, steps = 500,
+  scope: Record<string, number> = {}
+): { expression: string; data: PlotData2D } {
+  compileExpression(expr);
+  if (detectEquationType(expr) !== 'cartesian' || is3DExpression(expr)) {
+    throw new Error('A derivada está disponível apenas para funções cartesianas 2D de x.');
+  }
+  try {
+    const expression = derivative(normalizeExpression(expr), 'x').toString();
+    const data = evaluateGrid2D(expression, xMin, xMax, steps, scope);
+    const original = evaluateGrid2D(expr, xMin, xMax, steps, scope);
+    data.y = data.y.map((value, index) => Number.isFinite(original.y[index]) ? value : NaN);
+    if (!data.y.some(Number.isFinite)) throw new Error('nenhum valor real no intervalo');
+    return { expression, data };
+  } catch (error) {
+    throw new Error(`Não foi possível calcular a derivada desta fórmula: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**
@@ -52,38 +138,31 @@ export function is3DExpression(expr: string): boolean {
  */
 export function extractParameters(expressions: string[]): string[] {
   const params = new Set<string>();
-  const builtins = ['sin', 'cos', 'tan', 'sqrt', 'exp', 'log', 'ln', 'pi', 'e', 'x', 'y', 't', 'theta'];
   
   expressions.forEach(expr => {
     const trimmed = expr.trim();
     if (!trimmed) return;
     try {
-      const node = parse(trimmed);
+      const normalized = normalizeExpression(trimmed);
+      const type = detectEquationType(normalized);
+      const parseTargets = type === 'parametric'
+        ? splitTopLevel(normalized.slice(1, -1))
+        : [normalized];
+      const calledFunctions = new Set<string>();
+      for (const target of parseTargets) {
+        for (const match of target.matchAll(/\b([A-Za-z_]\w*)\s*\(/g)) calledFunctions.add(match[1]);
+      }
+      const nodes = parseTargets.map(target => parse(target));
       // @ts-ignore: mathjs AST traverse API is loosely typed
-      node.filter((n: any) => n.isSymbolNode).forEach((n: any) => {
-        // Ignora builtins globais (MathJS pode ter 'math' mas evitamos os principais)
-        if (!builtins.includes(n.name)) {
-          // Também filtraria constantes globais de JS se necessário
-          params.add(n.name);
-        }
+      nodes.flatMap(node => node.filter((n: any) => n.isSymbolNode)).forEach((n: any) => {
+        if (!RESERVED_SYMBOLS.has(n.name) && !calledFunctions.has(n.name)) params.add(n.name);
       });
     } catch {
       // Ignorar erros de parse (serão pegos na avaliação principal)
     }
   });
   
-  // Como MathJS inclui dezenas de units/functions, vamos remover 
-  // funções built-in dinamicamente tentando avaliar no vazio
-  const validParams: string[] = [];
-  params.forEach(p => {
-    try {
-      // Se conseguir avaliar p sozinho sem escopo e não der erro (ex: pi), não é parâmetro limpo.
-      // Ou melhor, assumimos que 1-char symbols ou não-functions são params.
-      validParams.push(p);
-    } catch {}
-  });
-
-  return validParams.sort();
+  return [...params].sort();
 }
 
 /**
@@ -103,9 +182,13 @@ export function calculateDefiniteIntegral(
   const evalAt = (xVal: number) => {
     try {
       const res = compiled.evaluate({ x: xVal, ...scope });
-      return typeof res === 'number' && isFinite(res) ? res : 0;
-    } catch {
-      return 0;
+      if (typeof res !== 'number' || !Number.isFinite(res)) {
+        throw new Error(`A função não possui valor real finito em x = ${xVal}.`);
+      }
+      return res;
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('A função')) throw error;
+      throw new Error(`Não foi possível avaliar a integral em x = ${xVal}.`);
     }
   };
   
@@ -219,13 +302,13 @@ export function evaluateGrid3D(
  * Detecta o tipo de equação pela sintaxe digitada
  */
 export function detectEquationType(expr: string): 'cartesian' | 'parametric' | 'polar' {
-  const trimmed = expr.trim();
+  const trimmed = normalizeExpression(expr);
   // Paramétrica: Ex: (sin(t), cos(t))
-  if (trimmed.startsWith('(') && trimmed.endsWith(')') && trimmed.includes(',')) {
+  if (trimmed.startsWith('(') && trimmed.endsWith(')') && splitTopLevel(trimmed.slice(1, -1)).length === 2) {
     return 'parametric';
   }
   // Polar: contém a variável theta isolada
-  if (/(?<![a-zA-Z])theta(?![a-zA-Z(])/.test(trimmed)) {
+  if (/^\s*r\s*=/.test(expr) || /(?<![a-zA-Z])theta(?![a-zA-Z(])/.test(trimmed)) {
     return 'polar';
   }
   return 'cartesian';
@@ -241,8 +324,12 @@ export function evaluateParametric(
   steps: number = 500,
   scope: Record<string, number> = {}
 ): PlotData2D {
-  const arrayExpr = `[${expr.substring(1, expr.length - 1)}]`;
-  const compiled = compileExpression(arrayExpr);
+  const normalized = normalizeExpression(expr);
+  const components = normalized.startsWith('(') && normalized.endsWith(')')
+    ? splitTopLevel(normalized.slice(1, -1))
+    : [];
+  if (components.length !== 2) throw new Error('Curva paramétrica deve usar o formato (x(t), y(t)).');
+  const compiled = components.map(compileExpression);
   const x: number[] = [];
   const y: number[] = [];
   const dt = (tMax - tMin) / (steps - 1);
@@ -250,16 +337,14 @@ export function evaluateParametric(
   for (let i = 0; i < steps; i++) {
     const t = tMin + i * dt;
     try {
-      const res = compiled.evaluate({ t, ...scope });
-      if (Array.isArray(res) || (res && typeof res.toArray === 'function')) {
-        const arr = Array.isArray(res) ? res : res.toArray();
-        if (arr.length >= 2) {
-          x.push(Number(arr[0]));
-          y.push(Number(arr[1]));
-        }
-      }
+      const values = compiled.map(component => component.evaluate({ ...scope, t }));
+      const valid = values.every(value => typeof value === 'number' && Number.isFinite(value));
+      x.push(valid ? values[0] : NaN);
+      y.push(valid ? values[1] : NaN);
     } catch {
-      // Ignora falhas pontuais
+      // Preserva a quebra da curva em pontos fora do domínio.
+      x.push(NaN);
+      y.push(NaN);
     }
   }
   return { x, y };
@@ -310,9 +395,10 @@ export interface NotablePoint {
 /**
  * Encontra raízes e extremos locais de um conjunto de pontos 2D (analisa Y)
  */
-export function findNotablePoints(data: PlotData2D): NotablePoint[] {
+export function findNotablePoints(data: PlotData2D, expression?: string, scope: Record<string, number> = {}): NotablePoint[] {
   const points: NotablePoint[] = [];
   const { x, y } = data;
+  const compiledExpression = expression ? compileExpression(expression) : null;
   
   // Para evitar ruídos extremos em assíntotas verticais
   const maxYJump = 100;
@@ -328,6 +414,14 @@ export function findNotablePoints(data: PlotData2D): NotablePoint[] {
     
     // Raiz (cruzamento do eixo X)
     if ((y0 < 0 && y1 >= 0) || (y0 > 0 && y1 <= 0)) {
+      if (expression) {
+        const midpoint = (x[i - 1] + x[i]) / 2;
+        try {
+          const midY = compiledExpression!.evaluate({ x: midpoint, ...scope });
+          const scale = Math.max(1e-12, Math.abs(y0), Math.abs(y1));
+          if (typeof midY !== 'number' || !Number.isFinite(midY) || Math.abs(midY) > scale * 10) continue;
+        } catch { continue; }
+      }
       // Interpolação linear simples para afinar o X
       let rootX = x1;
       if (y1 !== y0) {
@@ -354,21 +448,19 @@ export function findNotablePoints(data: PlotData2D): NotablePoint[] {
 export function calculateLinearRegression(x: number[], y: number[]): { m: number; b: number; rSquared: number } | null {
   if (x.length !== y.length || x.length < 2) return null;
   const n = x.length;
-  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  if (![...x, ...y].every(Number.isFinite)) return null;
+  const meanX = x.reduce((sum, value) => sum + value, 0) / n;
+  const meanY = y.reduce((sum, value) => sum + value, 0) / n;
+  let covariance = 0;
+  let varianceX = 0;
   for (let i = 0; i < n; i++) {
-    sumX += x[i];
-    sumY += y[i];
-    sumXY += x[i] * y[i];
-    sumX2 += x[i] * x[i];
+    const dx = x[i] - meanX;
+    covariance += dx * (y[i] - meanY);
+    varianceX += dx * dx;
   }
-  
-  const denominator = n * sumX2 - sumX * sumX;
-  if (Math.abs(denominator) < 1e-10) return null; // Linha vertical
-  
-  const m = (n * sumXY - sumX * sumY) / denominator;
-  const b = (sumY - m * sumX) / n;
-  
-  const meanY = sumY / n;
+  if (varianceX <= Number.EPSILON * Math.max(1, Math.abs(meanX))) return null;
+  const m = covariance / varianceX;
+  const b = meanY - m * meanX;
   let ssTot = 0, ssRes = 0;
   for (let i = 0; i < n; i++) {
     const f = m * x[i] + b;
@@ -383,9 +475,10 @@ export function calculateLinearRegression(x: number[], y: number[]): { m: number
 /**
  * Encontra interseções entre múltiplas curvas avaliadas na mesma grade X (Cartesianas)
  */
-export function findIntersections(data: PlotData2D[]): NotablePoint[] {
+export function findIntersections(data: PlotData2D[], expressions?: string[], scope: Record<string, number> = {}): NotablePoint[] {
   const intersections: NotablePoint[] = [];
   if (data.length < 2) return intersections;
+  const compiledExpressions = expressions?.map(compileExpression);
 
   for (let i = 0; i < data.length - 1; i++) {
     for (let j = i + 1; j < data.length; j++) {
@@ -408,6 +501,16 @@ export function findIntersections(data: PlotData2D[]): NotablePoint[] {
         const diffB = y1B - y2B;
         
         if (diffA * diffB <= 0 && diffA !== diffB) {
+          if (expressions?.[i] && expressions?.[j]) {
+            const midpoint = (eq1.x[k - 1] + eq1.x[k]) / 2;
+            try {
+              const a = compiledExpressions![i].evaluate({ x: midpoint, ...scope });
+              const b = compiledExpressions![j].evaluate({ x: midpoint, ...scope });
+              const midDiff = Number(a) - Number(b);
+              const scale = Math.max(1e-12, Math.abs(diffA), Math.abs(diffB));
+              if (!Number.isFinite(midDiff) || Math.abs(midDiff) > scale * 10) continue;
+            } catch { continue; }
+          }
           const m1 = y1B - y1A;
           const m2 = y2B - y2A;
           if (Math.abs(m1 - m2) > 1e-10) {

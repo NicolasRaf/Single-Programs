@@ -6,8 +6,9 @@
  */
 
 import './index.css';
+import { evaluateDerivative } from './mathEngine';
 import Plotly from 'plotly.js-dist-min';
-import { evaluateGrid2D, evaluateGrid3D, is3DExpression, extractParameters, calculateDefiniteIntegral, detectEquationType, evaluateParametric, evaluatePolar, findNotablePoints, calculateLinearRegression, findIntersections, type PlotData2D, type NotablePoint } from './mathEngine';
+import { evaluateGrid2D, evaluateGrid3D, is3DExpression, extractParameters, calculateDefiniteIntegral, detectEquationType, evaluateParametric, evaluatePolar, findNotablePoints, calculateLinearRegression, findIntersections, normalizeExpression, type PlotData2D, type PlotData3D, type NotablePoint } from './mathEngine';
 import { calculateThermoState, type ThermoInput } from './thermoEngine';
 import {
   renderPlot2D,
@@ -20,7 +21,7 @@ import {
   PlotStyle2D,
   PlotStyle3D
 } from './plotRenderer';
-import { parseCoordinates } from './coordinateParser';
+import { parseCoordinates, parseLocaleNumber } from './coordinateParser';
 
 // ────────────────────────────────────────────────────────
 // DOM References
@@ -75,16 +76,25 @@ const $btnClearCoord = document.getElementById('btn-clear-coord') as HTMLButtonE
 document.querySelectorAll('.panel-label.collapsible').forEach(label => {
   // Add 'collapsed' to all collapsibles by default initially to ensure state matches UI
   label.classList.add('collapsed');
-  
-  label.addEventListener('click', (e) => {
-    const targetId = (e.currentTarget as HTMLElement).getAttribute('data-target');
-    if (targetId) {
-      const targetContent = document.getElementById(targetId);
-      if (targetContent) {
-        label.classList.toggle('collapsed');
-        targetContent.classList.toggle('collapsed');
-      }
+  label.setAttribute('role', 'button');
+  label.setAttribute('tabindex', '0');
+  label.setAttribute('aria-expanded', 'false');
+  const toggleAccordion = () => {
+    const targetId = label.getAttribute('data-target');
+    const targetContent = targetId ? document.getElementById(targetId) : null;
+    if (targetContent) {
+      label.classList.toggle('collapsed');
+      targetContent.classList.toggle('collapsed');
+      label.setAttribute('aria-expanded', String(!label.classList.contains('collapsed')));
     }
+  };
+
+  label.addEventListener('click', () => {
+    toggleAccordion();
+  });
+  label.addEventListener('keydown', (event) => {
+    const keyboardEvent = event as KeyboardEvent;
+    if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') { keyboardEvent.preventDefault(); toggleAccordion(); }
   });
 });
 
@@ -106,7 +116,7 @@ if ($btnDownloadPng) {
 
 if ($btnDownloadCsv) {
   $btnDownloadCsv.addEventListener('click', () => {
-    if (currentMode === 'coordinates') {
+    if (lastPlot?.mode === 'coordinates') {
       exportCoordinatesCSV();
     } else {
       if (!hasPlot) {
@@ -183,63 +193,42 @@ if ($btnSuggestCoord) {
 }
 
 function exportCoordinatesCSV() {
-  const data = getTableData().filter(r => r.x && r.y);
-  if (data.length === 0) {
+  if (!lastPlot || lastPlot.mode !== 'coordinates') {
     showError('Nenhum dado de coordenada para exportar.');
     return;
   }
-  let csv = currentDimension === '3d' ? 'X,Y,Z\n' : 'X,Y\n';
-  data.forEach(c => {
-    if (currentDimension === '3d') {
-      csv += `${c.x},${c.y},${c.z}\n`;
-    } else {
-      csv += `${c.x},${c.y}\n`;
-    }
-  });
+  const { x, y, z } = lastPlot;
+  const csv = [z ? ['X', 'Y', 'Z'] : ['X', 'Y'], ...x.map((value, index) =>
+    z ? [value, y[index], z[index]] : [value, y[index]])]
+    .map(row => row.map(csvCell).join(',')).join('\r\n');
   triggerDownload(csv, 'lugrafic_coordenadas.csv');
 }
 
 function exportEquationsCSV() {
-  const validEquations = equations.filter(eq => eq.expr.trim() !== '');
-  if (validEquations.length === 0) {
+  if (!lastPlot || lastPlot.mode !== 'function') {
     showError('Nenhuma equação válida para exportar.');
     return;
   }
-  
-  const steps = parseInt($steps.value) || 200;
-  const xMin = parseFloat($xMin.value) || -10;
-  const xMax = parseFloat($xMax.value) || 10;
-  
-  let csv = 'X';
-  validEquations.forEach(eq => {
-    csv += `,${eq.expr}`;
-  });
-  csv += '\n';
-  
-  // Basic CSV export assuming all evaluate on same grid
-  // In a real scenario, parametric/polar have different bases.
-  // Here we just use the first cartesian or standard linspace.
-  const xVals = Array.from({length: steps}, (_, i) => xMin + (xMax - xMin) * i / (steps - 1));
-  
-  xVals.forEach((x, i) => {
-    let row = `${x.toFixed(4)}`;
-    validEquations.forEach(eq => {
-      try {
-        const type = detectEquationType(eq.expr);
-        if (type === 'cartesian') {
-          const plotData = evaluateGrid2D(eq.expr, xMin, xMax, steps, currentParameters);
-          row += `,${plotData.y[i] !== undefined ? plotData.y[i].toFixed(4) : ''}`;
-        } else {
-          row += `,NA`; // Placeholder for parametric/polar since they don't share same X axis
-        }
-      } catch(e) {
-        row += `,ERR`;
-      }
-    });
-    csv += row + '\n';
-  });
-  
+  let csv: string;
+  if (lastPlot.dimension === '3d') {
+    const rows: Array<Array<string | number>> = [['Equação', 'X', 'Y', 'Z']];
+    lastPlot.series3d.forEach(series => series.data.z.forEach((zRow, row) => zRow.forEach((z, col) => {
+      rows.push([series.label, series.data.x[row][col], series.data.y[row][col], z]);
+    })));
+    csv = rows.map(row => row.map(csvCell).join(',')).join('\r\n');
+  } else {
+    const rows: Array<Array<string | number>> = [['Equação', 'X', 'Y']];
+    lastPlot.series2d.forEach(series => series.data.x.forEach((x, index) => {
+      rows.push([series.label, x, series.data.y[index]]);
+    }));
+    csv = rows.map(row => row.map(csvCell).join(',')).join('\r\n');
+  }
   triggerDownload(csv, 'lugrafic_equacoes.csv');
+}
+
+function csvCell(value: string | number): string {
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
+  return `"${value.replace(/"/g, '""')}"`;
 }
 
 function triggerDownload(content: string, filename: string) {
@@ -252,12 +241,7 @@ function triggerDownload(content: string, filename: string) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-}
-
-if ($toggleAnalysis) {
-  $toggleAnalysis.addEventListener('change', () => {
-    if (hasPlot) plotFunction();
-  });
+  URL.revokeObjectURL(url);
 }
 
 const $xMin = document.getElementById('x-min') as HTMLInputElement;
@@ -265,6 +249,8 @@ const $xMax = document.getElementById('x-max') as HTMLInputElement;
 const $yMin = document.getElementById('y-min') as HTMLInputElement;
 const $yMax = document.getElementById('y-max') as HTMLInputElement;
 const $steps = document.getElementById('input-steps') as HTMLInputElement;
+const $zMin = document.getElementById('z-min') as HTMLInputElement;
+const $zMax = document.getElementById('z-max') as HTMLInputElement;
 
 // ────────────────────────────────────────────────────────
 // State
@@ -275,16 +261,26 @@ type Dimension = '2d' | '3d';
 type CoordSubtab = 'table' | 'paste';
 
 interface HistoryEntry {
-  expression: string;
+  label: string;
+  mode: 'function' | 'coordinates';
   dimension: Dimension;
+  equations?: EquationInput[];
+  coordinates?: { x: number[]; y: number[]; z?: number[] };
   timestamp: number;
 }
+
+type LastPlot =
+  | { mode: 'function'; dimension: '2d'; series2d: Array<{ label: string; data: PlotData2D }>; series3d: [] }
+  | { mode: 'function'; dimension: '3d'; series2d: []; series3d: Array<{ label: string; data: PlotData3D }> }
+  | { mode: 'coordinates'; dimension: Dimension; x: number[]; y: number[]; z?: number[] };
 
 let currentMode: AppMode = 'function';
 let currentDimension: Dimension = '2d';
 let currentCoordSubtab: CoordSubtab = 'table';
 let history: HistoryEntry[] = [];
 let hasPlot = false;
+let lastPlot: LastPlot | null = null;
+let coordinateDraft: Array<{ x: string; y: string; z: string }> = [];
 
 // ────────────────────────────────────────────────────────
 // Equation State Management
@@ -295,6 +291,7 @@ interface EquationInput {
   expr: string;
   color: string;
   integral?: { active: boolean; a: number; b: number };
+  derivative?: boolean;
 }
 
 let equations: EquationInput[] = [];
@@ -384,6 +381,8 @@ function updateEquation(id: string, expr: string): void {
 }
 
 function renderEquationList(): void {
+  const activeId = activeEquationInput?.dataset.equationId;
+  activeEquationInput = null;
   $equationList.innerHTML = '';
   equations.forEach((eq) => {
     const row = document.createElement('div');
@@ -404,9 +403,13 @@ function renderEquationList(): void {
     input.type = 'text';
     input.className = 'equation-input';
     input.value = eq.expr;
-    input.placeholder = currentDimension === '3d' ? 'ex: sin(x)*cos(y)' : 'ex: sin(x)';
+    input.placeholder = currentDimension === '3d' ? 'z = sin(x) * cos(y)' : 'y = sin(x)';
+    input.dataset.equationId = eq.id;
+    if (eq.id === activeId || !activeEquationInput) activeEquationInput = input;
+    input.setAttribute('aria-label', `Fórmula ${equations.indexOf(eq) + 1}`);
     input.spellcheck = false;
     input.autocomplete = 'off';
+    input.setAttribute('list', 'formula-examples');
     
     input.addEventListener('focus', () => {
        activeEquationInput = input;
@@ -414,6 +417,18 @@ function renderEquationList(): void {
     
     input.addEventListener('input', (e) => {
       updateEquation(eq.id, (e.target as HTMLInputElement).value);
+    });
+
+    input.addEventListener('blur', () => {
+      if (!input.value.trim()) return;
+      try {
+        normalizeExpression(input.value);
+        input.classList.remove('invalid');
+        input.removeAttribute('aria-invalid');
+      } catch {
+        input.classList.add('invalid');
+        input.setAttribute('aria-invalid', 'true');
+      }
     });
     
     input.addEventListener('keydown', (e) => {
@@ -455,6 +470,8 @@ function renderEquationList(): void {
     integralBtn.className = 'btn-integral-eq';
     integralBtn.title = 'Calcular Integral';
     integralBtn.innerHTML = '∫';
+    integralBtn.setAttribute('aria-label', 'Calcular integral definida');
+    integralBtn.setAttribute('aria-pressed', String(!!eq.integral?.active));
     integralBtn.onclick = () => {
       if (!eq.integral) eq.integral = { active: false, a: 0, b: 1 };
       eq.integral.active = !eq.integral.active;
@@ -462,11 +479,42 @@ function renderEquationList(): void {
       if (hasPlot) handlePlot();
     };
     
+    const derivativeBtn = document.createElement('button');
+    derivativeBtn.className = 'btn-integral-eq';
+    derivativeBtn.textContent = 'f′';
+    derivativeBtn.title = 'Mostrar derivada em x (curva tracejada)';
+    derivativeBtn.setAttribute('aria-label', 'Mostrar derivada em x');
+    derivativeBtn.setAttribute('aria-pressed', String(!!eq.derivative));
+    derivativeBtn.onclick = () => {
+      eq.derivative = !eq.derivative;
+      renderEquationList();
+      handlePlot();
+    };
+    const supportsCalculus = () => {
+      try { return detectEquationType(eq.expr) === 'cartesian' && !is3DExpression(eq.expr); }
+      catch { return false; }
+    };
+    const updateCalculusButtons = () => {
+      integralBtn.disabled = derivativeBtn.disabled = !supportsCalculus();
+      const derivativePanel = document.getElementById(`derivative-result-${eq.id}`);
+      const integralPanel = document.getElementById(`integral-panel-${eq.id}`);
+      if (derivativePanel) {
+        derivativePanel.hidden = !supportsCalculus();
+        derivativePanel.textContent = 'f′(x): clique em Plotar para atualizar';
+      }
+      if (integralPanel) integralPanel.hidden = !supportsCalculus();
+      const integralResult = document.getElementById(`int-result-${eq.id}`);
+      if (integralResult) integralResult.textContent = '= ?';
+    };
+    updateCalculusButtons();
+    input.addEventListener('input', updateCalculusButtons);
+
     row.appendChild(colorIndicator);
     row.appendChild(input);
     row.appendChild(suggestBtn);
     if (currentDimension === '2d') {
        row.appendChild(integralBtn);
+       row.appendChild(derivativeBtn);
     }
     if (equations.length > 1) {
        row.appendChild(removeBtn);
@@ -474,9 +522,18 @@ function renderEquationList(): void {
     
     $equationList.appendChild(row);
     
-    if (eq.integral?.active && currentDimension === '2d') {
+    if (eq.derivative && currentDimension === '2d' && supportsCalculus()) {
+      const derivativePanel = document.createElement('div');
+      derivativePanel.className = 'derivative-panel';
+      derivativePanel.id = `derivative-result-${eq.id}`;
+      derivativePanel.setAttribute('aria-live', 'polite');
+      derivativePanel.textContent = 'f′(x): clique em Plotar para calcular';
+      $equationList.appendChild(derivativePanel);
+    }
+    if (eq.integral?.active && currentDimension === '2d' && supportsCalculus()) {
       const intPanel = document.createElement('div');
       intPanel.className = 'integral-panel';
+      intPanel.id = `integral-panel-${eq.id}`;
       intPanel.innerHTML = `
         <span class="int-symbol">∫</span>
         <input type="number" class="int-input int-a" value="${eq.integral.a}" step="0.1" title="Limite Inferior (a)">
@@ -524,6 +581,7 @@ function setDimension(dim: Dimension): void {
 
   // Show/hide Z axis row
   $rowZAxis.style.display = dim === '3d' ? 'flex' : 'none';
+  document.querySelector<HTMLElement>('.log-options')!.style.display = dim === '3d' ? 'none' : 'flex';
 
   // Show/hide style selectors
   $selectStyle2d.style.display = dim === '2d' ? 'block' : 'none';
@@ -558,6 +616,10 @@ function setMode(mode: AppMode): void {
   $panelFunction.classList.toggle('hidden', mode !== 'function');
   $panelCoordinates.classList.toggle('hidden', mode !== 'coordinates');
   $panelThermo.classList.toggle('hidden', mode !== 'thermo');
+  const plotButtonText = $btnPlot.childNodes[$btnPlot.childNodes.length - 1];
+  if (plotButtonText?.nodeType === Node.TEXT_NODE) {
+    plotButtonText.textContent = mode === 'thermo' ? ' Calcular Estado' : ' Plotar Gráfico';
+  }
 
   if (mode === 'function') {
     if (activeEquationInput) {
@@ -595,14 +657,19 @@ $tabThermo.addEventListener('click', () => setMode('thermo'));
   $btnCalcThermo.addEventListener('click', () => {
     const substance = (document.getElementById('thermo-substance') as HTMLSelectElement).value as 'water' | 'ideal';
     const type = $thermoInputType.value as 'PT' | 'PV' | 'TV';
-    const pressure = parseFloat((document.getElementById('thermo-pressure') as HTMLInputElement).value) || 0;
-    const temperature = parseFloat((document.getElementById('thermo-temperature') as HTMLInputElement).value) || 0;
-    const volume = parseFloat((document.getElementById('thermo-volume') as HTMLInputElement).value) || 0;
-    const mass = parseFloat((document.getElementById('thermo-mass') as HTMLInputElement).value) || 1;
+    const readInput = (id: string): number => {
+      const raw = (document.getElementById(id) as HTMLInputElement).value.trim();
+      return raw === '' ? NaN : Number(raw);
+    };
+    const pressure = readInput('thermo-pressure');
+    const temperature = readInput('thermo-temperature');
+    const volume = readInput('thermo-volume');
+    const mass = readInput('thermo-mass');
 
     const input: ThermoInput = { type, pressure, temperature, volume, mass, substance };
 
     try {
+      hideError();
       const state = calculateThermoState(input);
 
       const $results = document.getElementById('thermo-results') as HTMLDivElement;
@@ -625,6 +692,7 @@ $tabThermo.addEventListener('click', () => setMode('thermo'));
         $warnings.textContent = '';
       }
     } catch (err) {
+      (document.getElementById('thermo-results') as HTMLDivElement).classList.add('hidden');
       showError('Erro no cálculo termodinâmico: ' + (err as Error).message);
     }
   });
@@ -671,22 +739,23 @@ function updateCoordTableHeader(): void {
 function createTableRow(index: number, values?: { x?: string; y?: string; z?: string }): HTMLTableRowElement {
   const tr = document.createElement('tr');
   const cols = currentDimension === '3d' ? ['x', 'y', 'z'] : ['x', 'y'];
-
-  tr.innerHTML = `
-    <td class="td-index">${index}</td>
-    ${cols.map((col) => `
-      <td>
-        <input
-          type="text"
-          inputmode="decimal"
-          class="coord-cell"
-          data-col="${col}"
-          placeholder="0"
-          value="${(values && values[col as keyof typeof values]) || ''}"
-        />
-      </td>
-    `).join('')}
-  `;
+  const indexCell = document.createElement('td');
+  indexCell.className = 'td-index';
+  indexCell.textContent = String(index);
+  tr.appendChild(indexCell);
+  cols.forEach((col) => {
+    const cell = document.createElement('td');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = 'decimal';
+    input.className = 'coord-cell';
+    input.dataset.col = col;
+    input.placeholder = '0';
+    input.setAttribute('aria-label', `${col.toUpperCase()} do ponto ${index}`);
+    input.value = values?.[col as keyof typeof values] ?? '';
+    cell.appendChild(input);
+    tr.appendChild(cell);
+  });
 
   // Navigate between cells with Tab/Enter and auto-create rows
   const inputs = tr.querySelectorAll('input');
@@ -739,17 +808,24 @@ function removeLastTableRow(): void {
 
 function rebuildTableForDimension(): void {
   // Read current values
-  const currentData = getTableData();
+  coordinateDraft = Array.from($coordTableBody.querySelectorAll('tr'), (row, index) => {
+    const inputs = row.querySelectorAll('input');
+    return {
+      x: inputs[0]?.value ?? '',
+      y: inputs[1]?.value ?? '',
+      z: inputs.length > 2 ? inputs[2].value : coordinateDraft[index]?.z ?? '',
+    };
+  });
   $coordTableBody.innerHTML = '';
 
   // Re-create rows with current data
-  if (currentData.length === 0) {
+  if (coordinateDraft.length === 0) {
     // Add default empty rows
     for (let i = 0; i < 5; i++) {
       addTableRow();
     }
   } else {
-    for (const row of currentData) {
+    for (const row of coordinateDraft) {
       addTableRow({ x: row.x, y: row.y, z: row.z });
     }
   }
@@ -774,6 +850,23 @@ function getTableData(): Array<{ x: string; y: string; z: string }> {
   return data;
 }
 
+function getValidatedTableCoordinates(): { x: number[]; y: number[]; z?: number[] } {
+  const rows = getTableData();
+  const x: number[] = [];
+  const y: number[] = [];
+  const z: number[] = [];
+  rows.forEach((row, index) => {
+    const raw = currentDimension === '3d' ? [row.x, row.y, row.z] : [row.x, row.y];
+    if (raw.some(value => value === '')) throw new Error(`Linha ${index + 1}: preencha todas as coordenadas.`);
+    const values = raw.map(value => parseLocaleNumber(value, true));
+    const invalid = values.findIndex(value => !Number.isFinite(value));
+    if (invalid >= 0) throw new Error(`Linha ${index + 1}, coluna ${invalid + 1}: número inválido.`);
+    x.push(values[0]); y.push(values[1]);
+    if (currentDimension === '3d') z.push(values[2]);
+  });
+  return currentDimension === '3d' ? { x, y, z } : { x, y };
+}
+
 function updateCoordCount(): void {
   const data = getTableData();
   const filled = data.filter((r) => r.x && r.y).length;
@@ -796,6 +889,7 @@ function importPasteToTable(): void {
 
     // Clear table and populate
     $coordTableBody.innerHTML = '';
+    coordinateDraft = [];
 
     if (result.dimension === '3d' && result.data3d) {
       for (let i = 0; i < result.data3d.x.length; i++) {
@@ -805,6 +899,7 @@ function importPasteToTable(): void {
           z: String(result.data3d.z[i]),
         });
       }
+      coordinateDraft = result.data3d.x.map((x, i) => ({ x: String(x), y: String(result.data3d!.y[i]), z: String(result.data3d!.z[i]) }));
     } else if (result.data2d) {
       for (let i = 0; i < result.data2d.x.length; i++) {
         addTableRow({
@@ -812,6 +907,7 @@ function importPasteToTable(): void {
           y: String(result.data2d.y[i]),
         });
       }
+      coordinateDraft = result.data2d.x.map((x, i) => ({ x: String(x), y: String(result.data2d!.y[i]), z: '' }));
     }
 
     // Switch to table view to show the imported data
@@ -835,12 +931,14 @@ $btnRemoveRow.addEventListener('click', removeLastTableRow);
 if ($btnClearCoord) {
   $btnClearCoord.addEventListener('click', () => {
     $coordTableBody.innerHTML = '';
+    coordinateDraft = [];
     for (let i = 0; i < 5; i++) addTableRow();
     $inputCoordinates.value = '';
     updateCoordCount();
     clearPlot($plotContainer);
     showPlaceholder();
     hasPlot = false;
+    lastPlot = null;
   });
 }
 
@@ -876,10 +974,25 @@ function showPlaceholder(): void {
 // History management
 // ────────────────────────────────────────────────────────
 
-function addToHistory(expression: string, dimension: Dimension): void {
-  if (history.length > 0 && history[0].expression === expression) return;
-
-  history.unshift({ expression, dimension, timestamp: Date.now() });
+function addToHistory(): void {
+  if (!lastPlot) return;
+  const entry: HistoryEntry = lastPlot.mode === 'function'
+    ? {
+        label: equations.filter(eq => eq.expr.trim()).map(eq => eq.expr).join(' • '),
+        mode: 'function',
+        dimension: lastPlot.dimension,
+        equations: equations.filter(eq => eq.expr.trim()).map(eq => ({ ...eq, integral: eq.integral ? { ...eq.integral } : undefined })),
+        timestamp: Date.now(),
+      }
+    : {
+        label: `${lastPlot.x.length} pontos`,
+        mode: 'coordinates',
+        dimension: lastPlot.dimension,
+        coordinates: { x: [...lastPlot.x], y: [...lastPlot.y], z: lastPlot.z ? [...lastPlot.z] : undefined },
+        timestamp: Date.now(),
+      };
+  if (history.length > 0 && history[0].label === entry.label && history[0].mode === entry.mode) return;
+  history.unshift(entry);
   if (history.length > 20) history.pop();
 
   renderHistory();
@@ -901,15 +1014,26 @@ function renderHistory(): void {
     li.className = 'history-item';
     li.innerHTML = `
       <span class="history-dot"></span>
-      <span class="history-expr">${escapeHtml(entry.expression)}</span>
+      <span class="history-expr">${escapeHtml(entry.label)}</span>
       <span class="history-dim ${entry.dimension === '3d' ? 'dim-3d' : ''}">${entry.dimension.toUpperCase()}</span>
     `;
     li.addEventListener('click', () => {
-      equations = [];
-      addEquation(entry.expression);
-      setMode('function');
       setDimension(entry.dimension);
-      plotFunction();
+      if (entry.mode === 'function' && entry.equations) {
+        equations = entry.equations.map(eq => ({ ...eq, id: generateId(), integral: eq.integral ? { ...eq.integral } : undefined }));
+        renderEquationList();
+        setMode('function');
+        plotFunction();
+      } else if (entry.coordinates) {
+        coordinateDraft = entry.coordinates.x.map((x, index) => ({
+          x: String(x), y: String(entry.coordinates!.y[index]), z: entry.coordinates!.z ? String(entry.coordinates!.z[index]) : '',
+        }));
+        $coordTableBody.innerHTML = '';
+        coordinateDraft.forEach(row => addTableRow(row));
+        setMode('coordinates');
+        setCoordSubtab('table');
+        plotCoordinatesFromTable();
+      }
     });
     $historyList.appendChild(li);
   }
@@ -926,13 +1050,17 @@ function escapeHtml(str: string): string {
 // ────────────────────────────────────────────────────────
 
 function getAxisValues() {
-  return {
-    xMin: parseFloat($xMin.value) || -10,
-    xMax: parseFloat($xMax.value) || 10,
-    yMin: parseFloat($yMin.value) || -10,
-    yMax: parseFloat($yMax.value) || 10,
-    steps: parseInt($steps.value) || 200,
+  const read = (input: HTMLInputElement, fallback: number) => input.value.trim() === '' ? fallback : Number(input.value);
+  const values = {
+    xMin: read($xMin, -10), xMax: read($xMax, 10),
+    yMin: read($yMin, -10), yMax: read($yMax, 10),
+    zMin: read($zMin, -10), zMax: read($zMax, 10), steps: read($steps, 200),
   };
+  if (!Object.values(values).every(Number.isFinite)) throw new Error('Os limites dos eixos e os passos devem ser números finitos.');
+  if (values.xMin >= values.xMax || values.yMin >= values.yMax || values.zMin >= values.zMax) throw new Error('O limite mínimo deve ser menor que o máximo.');
+  values.steps = Math.trunc(values.steps);
+  if (values.steps < 10 || values.steps > 1000) throw new Error('Use entre 10 e 1000 passos.');
+  return values;
 }
 
 async function plotFunction(): Promise<void> {
@@ -944,13 +1072,13 @@ async function plotFunction(): Promise<void> {
     return;
   }
 
-  const { xMin, xMax, yMin, yMax, steps } = getAxisValues();
   const is3D = currentDimension === '3d';
   
   // Extrai parâmetros e gera os sliders
   updateParameters(validEquations.map(e => e.expr));
 
   try {
+    const { xMin, xMax, yMin, yMax, zMin, zMax, steps } = getAxisValues();
     hidePlaceholder();
 
     if (is3D) {
@@ -960,7 +1088,8 @@ async function plotFunction(): Promise<void> {
         exprLabel: eq.expr,
         color: eq.color
       }));
-      await renderPlot3D($plotContainer, items, style3d);
+      await renderPlot3D($plotContainer, items, style3d, { x: [xMin, xMax], y: [yMin, yMax], z: [zMin, zMax] });
+      lastPlot = { mode: 'function', dimension: '3d', series2d: [], series3d: items.map(item => ({ label: item.exprLabel, data: item.data })) };
     } else {
       const style2d = $selectStyle2d.value as PlotStyle2D;
       const items = validEquations.map(eq => {
@@ -975,14 +1104,16 @@ async function plotFunction(): Promise<void> {
         } else {
           plotData = evaluateGrid2D(eq.expr, xMin, xMax, steps, currentParameters);
           if ($toggleAnalysis && $toggleAnalysis.checked) {
-            notable = findNotablePoints(plotData);
+            notable = findNotablePoints(plotData, eq.expr, currentParameters);
           }
         }
 
-        const item: { data: PlotData2D; exprLabel: string; color: string; integral?: { data: PlotData2D }; notablePoints?: NotablePoint[] } = {
+        if (!plotData.y.some(Number.isFinite)) throw new Error(`A fórmula “${eq.expr}” não produziu valores reais no intervalo.`);
+        const item: { data: PlotData2D; exprLabel: string; color: string; equationType: ReturnType<typeof detectEquationType>; integral?: { data: PlotData2D }; derivative?: { expression: string; data: PlotData2D }; notablePoints?: NotablePoint[] } = {
           data: plotData,
           exprLabel: eq.expr,
           color: eq.color,
+          equationType: type,
           notablePoints: notable
         };
         
@@ -995,13 +1126,19 @@ async function plotFunction(): Promise<void> {
              data: evaluateGrid2D(eq.expr, eq.integral.a, eq.integral.b, Math.min(steps, 200), currentParameters)
           };
         }
+        if (eq.derivative && type === 'cartesian') {
+          item.derivative = evaluateDerivative(eq.expr, xMin, xMax, steps, currentParameters);
+          const result = document.getElementById(`derivative-result-${eq.id}`);
+          if (result) result.textContent = `f′(x) = ${item.derivative.expression} (tracejada)`;
+        }
         return item;
       });
 
       // Find intersections if analysis is on
       if ($toggleAnalysis && $toggleAnalysis.checked) {
-        const cartesianData = items.map(i => i.data);
-        const intersections = findIntersections(cartesianData);
+        const cartesianItems = items.filter(item => item.equationType === 'cartesian');
+        const cartesianData = cartesianItems.map(i => i.data);
+        const intersections = findIntersections(cartesianData, cartesianItems.map(item => item.exprLabel), currentParameters);
         if (intersections.length > 0 && items.length > 0) {
           if (!items[0].notablePoints) items[0].notablePoints = [];
           items[0].notablePoints.push(...intersections);
@@ -1013,11 +1150,15 @@ async function plotFunction(): Promise<void> {
         y: $yLog.checked ? 'log' : 'linear'
       };
 
-      await renderPlot2D($plotContainer, items, style2d, false, axisTypes);
+      await renderPlot2D($plotContainer, items, style2d, false, axisTypes, { x: [xMin, xMax], y: [yMin, yMax] });
+      lastPlot = { mode: 'function', dimension: '2d', series2d: items.flatMap(item => [
+        { label: item.exprLabel, data: item.data },
+        ...(item.derivative ? [{ label: `Derivada de ${item.exprLabel}: ${item.derivative.expression}`, data: item.derivative.data }] : [])
+      ]), series3d: [] };
     }
 
     hasPlot = true;
-    addToHistory(validEquations.map(e => e.expr).join(', '), currentDimension);
+    addToHistory();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     showError(message);
@@ -1026,34 +1167,22 @@ async function plotFunction(): Promise<void> {
 
 async function plotCoordinatesFromTable(): Promise<void> {
   hideError();
-  const data = getTableData();
-  const filled = data.filter((r) => r.x && r.y);
-
-  if (filled.length < 2) {
-    showError('Insira pelo menos 2 pontos com valores X e Y.');
-    return;
-  }
 
   try {
+    const parsed = getValidatedTableCoordinates();
+    if (parsed.x.length < 2) throw new Error('Insira pelo menos 2 pontos completos.');
     hidePlaceholder();
     resetColorCycle();
 
     if (currentDimension === '3d') {
       const style3d = $selectStyle3d.value as PlotStyle3D;
-      const x = filled.map((r) => parseFloat(r.x)).filter((n) => !isNaN(n));
-      const y = filled.map((r) => parseFloat(r.y)).filter((n) => !isNaN(n));
-      const z = filled.map((r) => parseFloat(r.z)).filter((n) => !isNaN(n));
-
-      if (z.length < 2) {
-        showError('Para 3D, preencha também os valores de Z.');
-        return;
-      }
+      const { x, y, z = [] } = parsed;
 
       await renderScatter3D($plotContainer, x, y, z, 'Coordenadas 3D', style3d);
+      lastPlot = { mode: 'coordinates', dimension: '3d', x: [...x], y: [...y], z: [...z] };
     } else {
       const style2d = $selectStyle2d.value as PlotStyle2D;
-      const x = filled.map((r) => parseFloat(r.x)).filter((n) => !isNaN(n));
-      const y = filled.map((r) => parseFloat(r.y)).filter((n) => !isNaN(n));
+      const { x, y } = parsed;
 
       const axisTypes: { x: 'linear' | 'log', y: 'linear' | 'log' } = {
         x: $xLog.checked ? 'log' : 'linear',
@@ -1074,10 +1203,11 @@ async function plotCoordinatesFromTable(): Promise<void> {
       }
 
       await renderScatter2D($plotContainer, { x, y }, 'Coordenadas', style2d, axisTypes, regressionData);
+      lastPlot = { mode: 'coordinates', dimension: '2d', x: [...x], y: [...y] };
     }
 
     hasPlot = true;
-    addToHistory(`[${filled.length} pontos ${currentDimension.toUpperCase()}]`, currentDimension);
+    addToHistory();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     showError(message);
@@ -1110,6 +1240,7 @@ async function plotCoordinatesFromPaste(): Promise<void> {
         'Coordenadas 3D',
         style3d
       );
+      lastPlot = { mode: 'coordinates', dimension: '3d', x: [...result.data3d.x], y: [...result.data3d.y], z: [...result.data3d.z] };
     } else if (result.data2d) {
       setDimension('2d');
       const style2d = $selectStyle2d.value as PlotStyle2D;
@@ -1133,10 +1264,11 @@ async function plotCoordinatesFromPaste(): Promise<void> {
       }
 
       await renderScatter2D($plotContainer, result.data2d, 'Coordenadas', style2d, axisTypes, regressionData);
+      lastPlot = { mode: 'coordinates', dimension: '2d', x: [...result.data2d.x], y: [...result.data2d.y] };
     }
 
     hasPlot = true;
-    addToHistory(`[${result.pointCount} pontos ${result.dimension.toUpperCase()}]`, result.dimension);
+    addToHistory();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     showError(message);
@@ -1150,6 +1282,8 @@ async function plotCoordinatesFromPaste(): Promise<void> {
 function handlePlot(): void {
   if (currentMode === 'function') {
     plotFunction();
+  } else if (currentMode === 'thermo') {
+    (document.getElementById('btn-calc-thermo') as HTMLButtonElement).click();
   } else if (currentCoordSubtab === 'table') {
     plotCoordinatesFromTable();
   } else {
@@ -1172,9 +1306,11 @@ function handleClearAll(): void {
 
   // Reset table to empty
   $coordTableBody.innerHTML = '';
+  coordinateDraft = [];
   for (let i = 0; i < 5; i++) addTableRow();
 
   hasPlot = false;
+  lastPlot = null;
 }
 
 // ────────────────────────────────────────────────────────
@@ -1207,7 +1343,7 @@ $mathToolbar.addEventListener('click', (e) => {
       activeEquationInput.value = val.substring(0, start) + insert + val.substring(end);
       
       // Update state
-      const id = equations.find(eq => eq.expr === val)?.id;
+      const id = activeEquationInput.dataset.equationId;
       if (id) updateEquation(id, activeEquationInput.value);
 
       // Move cursor inside parenthesis if it ends with ()
@@ -1216,67 +1352,6 @@ $mathToolbar.addEventListener('click', (e) => {
       activeEquationInput.focus();
     }
   }
-});
-
-$btnDownloadPng.addEventListener('click', async () => {
-  if (!hasPlot) {
-    showError('Não há gráfico para baixar.');
-    return;
-  }
-  const Plotly = await import('plotly.js-dist-min');
-  Plotly.default.downloadImage($plotContainer, {
-    format: 'png',
-    filename: `lugrafic_plot`,
-    height: 800,
-    width: 1200
-  });
-});
-
-$btnDownloadCsv.addEventListener('click', () => {
-  if (!hasPlot) {
-    showError('Não há dados para exportar.');
-    return;
-  }
-  
-  if (currentDimension === '3d') {
-    showError('A exportação de superfícies 3D ainda não é suportada em CSV.');
-    return;
-  }
-  
-  const validEquations = equations.filter(eq => eq.expr.trim() !== '');
-  if (validEquations.length === 0) return;
-  
-  const { xMin, xMax, steps } = getAxisValues();
-  let csvContent = "data:text/csv;charset=utf-8,X";
-  
-  // Headers
-  validEquations.forEach((eq, idx) => {
-    csvContent += `,Y${idx+1} (${eq.expr})`;
-  });
-  csvContent += "\\r\\n";
-  
-  // First equation defines the X grid
-  const baseData = evaluateGrid2D(validEquations[0].expr, xMin, xMax, steps);
-  const xValues = baseData.x;
-  
-  // Data rows
-  const allYData = validEquations.map(eq => evaluateGrid2D(eq.expr, xMin, xMax, steps).y);
-  
-  xValues.forEach((x, i) => {
-    let row = `${x.toFixed(4)}`;
-    allYData.forEach(yData => {
-      row += `,${yData[i] !== null ? yData[i].toFixed(4) : ''}`;
-    });
-    csvContent += row + "\\r\\n";
-  });
-  
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute("download", "lugrafic_dados.csv");
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
 });
 
 // Ctrl+Enter in coordinates textarea to plot
@@ -1290,9 +1365,7 @@ $inputCoordinates.addEventListener('keydown', (e) => {
 // Responsive resize
 window.addEventListener('resize', () => {
   if (hasPlot) {
-    import('plotly.js-dist-min').then((Plotly) => {
-      Plotly.default.Plots.resize($plotContainer);
-    });
+    Plotly.Plots.resize($plotContainer);
   }
 });
 

@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
     <div id="app">
@@ -152,7 +152,7 @@
                 </div>
                 <div class="thermo-input-row" id="thermo-t-row">
                   <span class="thermo-input-label">T</span>
-                  <input type="number" id="thermo-temperature" class="input-axis" value="100" step="1" />
+                  <input type="number" id="thermo-temperature" class="input-axis" value="25" step="1" />
                   <span class="thermo-unit">°C</span>
                 </div>
                 <div class="thermo-input-row hidden" id="thermo-v-row">
@@ -219,6 +219,13 @@
             <div id="equation-list" class="equation-list">
               <!-- Equation rows injected by JS -->
             </div>
+            <datalist id="formula-examples">
+              <option value="y = sin(x)"></option>
+              <option value="f(x) = x^2 - 4"></option>
+              <option value="(3*cos(t), 3*sin(t))"></option>
+              <option value="r = 2 + sin(5*theta)"></option>
+              <option value="z = sin(x) * cos(y)"></option>
+            </datalist>
 
             <div class="action-buttons-row" style="display: flex; gap: 8px; margin-top: 15px; margin-bottom: 5px; align-items: center;">
               <button id="btn-add-equation" class="btn-ghost btn-add-eq" title="Adicionar equação" style="flex: 1; margin: 0;">
@@ -242,7 +249,7 @@
               <button class="btn-math" data-insert="t">t</button>
               <button class="btn-math" data-insert="theta">θ</button>
             </div>
-            <div class="input-hint" id="equation-hint">Pressione <kbd>Enter</kbd> nos campos para plotar</div>
+            <div class="input-hint" id="equation-hint">Aceita <code>y = f(x)</code>, <code>z = f(x,y)</code>, <code>r = f(theta)</code> e <code>(x(t), y(t))</code>. Pressione <kbd>Enter</kbd> para plotar.</div>
             
             <!-- Parameters Container (Dynamic Sliders) -->
             <div id="parameters-container" class="parameters-container hidden">
@@ -451,7 +458,7 @@
           </button>
 
           <!-- Error Display -->
-          <div id="error-display" class="error-display hidden"></div>
+          <div id="error-display" class="error-display hidden" role="alert" aria-live="assertive"></div>
 
           <!-- History -->
           <div class="panel" id="panel-history">
