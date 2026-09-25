@@ -1,4 +1,4 @@
-# LuGrafic 0.3.0
+# LuGrafic 0.3.1
 
 ## Download e atualização
 
@@ -10,6 +10,7 @@
 
 ## Novidades
 
+- Fix: Unificação e atualização dos ícones da aplicação em todas as resoluções e janelas (v0.3.1).
 - Área de Termodinâmica redesenhada e integrada ao padrão visual dos gráficos.
 - Entradas por pressão e entalpia, pressão e entropia e pressão e volume específico.
 - Diagrama T–s interativo com indicação visual do estado e da fase.

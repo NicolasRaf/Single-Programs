@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="LuGrafic">
+  <defs>
+    <linearGradient id="background" x1="52" y1="36" x2="460" y2="476" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#32131c"/>
+      <stop offset="1" stop-color="#16090d"/>
+    </linearGradient>
+    <linearGradient id="graph" x1="66" y1="368" x2="446" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff0055"/>
+      <stop offset="0.44" stop-color="#ff0055"/>
+      <stop offset="0.72" stop-color="#9d00ff"/>
+      <stop offset="1" stop-color="#00d4ff"/>
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="488" height="488" rx="112" fill="url(#background)"/>
+  <rect x="12" y="12" width="488" height="488" rx="112" fill="none" stroke="#682439" stroke-width="12"/>
+  <path d="M66 378 158 138 254 324 350 82 446 258" fill="none" stroke="url(#graph)" stroke-width="43" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

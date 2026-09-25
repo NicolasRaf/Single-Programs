@@ -148,9 +148,11 @@ body::before {
   justify-content: center;
 }
 
-.logo-icon svg {
+.logo-icon svg,
+.logo-icon img {
   width: 100%;
   height: 100%;
+  display: block;
 }
 
 #app-header h1 {
